@@ -45,7 +45,21 @@ export function activate(context: vscode.ExtensionContext) {
 		return result;
 	};
 
-	const parseLine = (line: string) => {
+	class DirectoryListingData {
+		identifier: string;
+		isDir: boolean;
+		name: string;
+		isNew: boolean;
+
+		constructor(identifier: string, isDir: boolean, name: string, isNew: boolean){
+			this.identifier = identifier;
+			this.isDir = isDir;
+			this.name = name;
+			this.isNew = isNew;
+		}
+	}
+
+	const parseLine = (line: string): DirectoryListingData => {
 		let parts = line.split(' ');
 		if (parts.length == 3){
 			let identifier = parts[0];
@@ -71,9 +85,57 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	};
 
+
+	const getIdentifiersFromContent = (content: string) => {
+		let res: Map<string, DirectoryListingData> = new Map();
+		for (let line of content.split('\n')){
+			if (line.trim().length === 0) {
+				continue;
+			}
+			let { identifier, isDir, name, isNew } = parseLine(line);
+			res.set(identifier, { identifier, isDir, name, isNew });
+		}
+		return res;
+	};
+
 	const handleSave = vscode.commands.registerCommand('vsoil.handleSave', async () => {
 		let doc = await getVsoilDoc();
+		let originalContent = await getContentForPath(currentDir!);
+		var originalIdentifiers: Map<string, DirectoryListingData> = getIdentifiersFromContent(originalContent);
 		let content = doc.getText();
+		var newIdentifiers: Map<string, DirectoryListingData> = getIdentifiersFromContent(content);
+
+		// get the identifiers that are in the original content but not in the new content
+		var deletedIdentifiers: Map<string, DirectoryListingData> = new Map();
+		for (let [identifier, obj] of originalIdentifiers){
+			if (!newIdentifiers.has(identifier)){
+				deletedIdentifiers.set(identifier, obj);
+			}
+		}
+
+		if (deletedIdentifiers.size > 0){
+			// ask for confirmation
+			let message = 'Are you sure you want to delete the following files/directories?\n';
+			for (let [identifier, { isDir, name, isNew }] of deletedIdentifiers){
+				message += `${name}\n`;
+			}
+			let response = await vscode.window.showInformationMessage(message, 'Yes', 'No');
+			if (response === 'Yes'){
+				for (let [identifier, { isDir, name, isNew }] of deletedIdentifiers){
+					// delete the file/directory
+					let path = getPathForIdentifier(identifier);
+					if (path){
+						if (isDir) {
+							await vscode.workspace.fs.delete(vscode.Uri.parse(path), { recursive: true });
+						}
+						else {
+							await vscode.workspace.fs.delete(vscode.Uri.parse(path));
+						}
+					}
+				}
+			}
+		}
+
 		let lines = content.split('\n');
 		var modified = false;
 		for (let line of lines){
