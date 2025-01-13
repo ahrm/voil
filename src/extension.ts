@@ -72,8 +72,6 @@ export function activate(context: vscode.ExtensionContext) {
 	const handleEnter = vscode.commands.registerCommand('vsoil.handleEnter', async () => {
 		let currentCursorLineIndex = vscode.window.activeTextEditor?.selection.active.line;
 		if (currentCursorLineIndex !== undefined) {
-			// let currentDirName = vsoilDoc?.getText(vsoilDoc.lineAt(currentCursorLineIndex).range).substring(2);
-			// let isDir = vsoilDoc?.getText(vsoilDoc.lineAt(currentCursorLineIndex).range).startsWith('/');
 			let {identifier, isDir, name} = parseLine(vsoilDoc?.getText(vsoilDoc.lineAt(currentCursorLineIndex).range) ?? '');
 			let currentDirName = name;
 			var focusLine = '';
@@ -118,8 +116,7 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	
 
-	let updateDocContentToCurrentDir = async () => {
-		let rootUri = currentDir;
+	const getContentForPath = async (rootUri: vscode.Uri) => {
 		let files = await vscode.workspace.fs.readDirectory(rootUri!);
 		let content = '';
 
@@ -144,6 +141,12 @@ export function activate(context: vscode.ExtensionContext) {
 				content += `${identifier} - ${file[0]}\n`;
 			}
 		});
+		return content;
+	}
+
+	let updateDocContentToCurrentDir = async () => {
+		let rootUri = currentDir;
+		let content = await getContentForPath(rootUri!);
 		let doc = await getVsoilDoc();
 		// set doc content
 		const edit = new vscode.WorkspaceEdit();
@@ -154,6 +157,7 @@ export function activate(context: vscode.ExtensionContext) {
 		edit.replace(doc.uri, fullRange, content);
 		await vscode.workspace.applyEdit(edit);
 	};
+
 	const disposable = vscode.commands.registerCommand('vsoil.startvsoil', async () => {
 
 
