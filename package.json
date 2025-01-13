@@ -17,6 +17,13 @@
         "command": "vsoil.startvsoil",
         "title": "Open vsoil"
       }
+    ],
+    "keybindings": [
+      {
+        "command": "vsoil.handleSave",
+        "key": "ctrl+s",
+        "when": "editorTextFocus && vsoilDoc"
+      }
     ]
   },
   "scripts": {

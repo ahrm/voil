@@ -50,24 +50,55 @@ export function activate(context: vscode.ExtensionContext) {
 		if (parts.length == 3){
 			let identifier = parts[0];
 			let typeString = parts[1];
-			let name = parts.slice(2).join(' ');
+			let name = parts.slice(2).join(' ').trim();
 			return {
 				identifier: identifier,
 				isDir: typeString === '/',
-				name: name
+				name: name,
+				isNew: false,
 			};
 		}
 		else{
 			let typeString = parts[0];
-			let name = parts[1];
+			let name = parts.slice(1).join(' ').trim();
 			return {
 				identifier: '',
 				isDir: typeString === '/',
-				name: name
+				name: name,
+				isNew: !name.startsWith('.')
 			};
 
 		}
 	};
+
+	const handleSave = vscode.commands.registerCommand('vsoil.handleSave', async () => {
+		let doc = await getVsoilDoc();
+		let content = doc.getText();
+		let lines = content.split('\n');
+		var modified = false;
+		for (let line of lines){
+			if (line.trim().length === 0) {
+				continue;
+			}
+
+			let { identifier, isDir, name, isNew } = parseLine(line);
+			if (isNew) {
+				let fullPath = vscode.Uri.joinPath(currentDir!, name + "/");
+				if (isDir) {
+					await vscode.workspace.fs.createDirectory(fullPath);
+					modified = true;
+				}
+				else {
+					await vscode.workspace.fs.writeFile(fullPath, new Uint8Array());
+					modified = true;
+				}
+			}
+		}
+
+		if (modified){
+			await updateDocContentToCurrentDir();
+		}
+	});
 
 	const handleEnter = vscode.commands.registerCommand('vsoil.handleEnter', async () => {
 		let currentCursorLineIndex = vscode.window.activeTextEditor?.selection.active.line;
