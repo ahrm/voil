@@ -20,17 +20,36 @@ export function activate(context: vscode.ExtensionContext) {
 		if (currentCursorLineIndex !== undefined) {
 			let currentDirName = vsoilDoc?.getText(vsoilDoc.lineAt(currentCursorLineIndex).range).substring(2);
 			let isDir = vsoilDoc?.getText(vsoilDoc.lineAt(currentCursorLineIndex).range).startsWith('/');
+			var focusLine = '';
+
 			if (isDir){
 				if (currentDirName === '..') {
+					// focusline should be the last part of current path
+					let pathParts = currentDir?.path.split('/');
+					focusLine = pathParts?.[pathParts.length - 1] ?? '';
 					currentDir = vscode.Uri.joinPath(currentDir!, '..');
 				}
 				else {
 					currentDir = vscode.Uri.joinPath(currentDir!, currentDirName!);
-				}
-				if (vscode.window.activeTextEditor) {
-					vscode.window.activeTextEditor.selection = new vscode.Selection(0, 0, 0, 0);
+					if (vscode.window.activeTextEditor) {
+						vscode.window.activeTextEditor.selection = new vscode.Selection(0, 0, 0, 0);
+						vscode.window.activeTextEditor.revealRange(new vscode.Range(0, 0, 0, 0));
+					}
 				}
 				await updateDocContentToCurrentDir();
+				if (focusLine){
+					let lineIndex = vsoilDoc?.getText().split('\n').findIndex((line) => line.startsWith(`/ ${focusLine}`));
+					if (lineIndex !== undefined && lineIndex !== -1){
+						let line = vsoilDoc?.lineAt(lineIndex);
+						if (line){
+							let selection = new vscode.Selection(line.range.start, line.range.start);
+							if (vscode.window.activeTextEditor) {
+								vscode.window.activeTextEditor.selection = selection;
+								vscode.window.activeTextEditor.revealRange(new vscode.Range(selection.start, selection.end));
+							}
+						}
+					}
+				}
 			}
 			else{
 				// open file
