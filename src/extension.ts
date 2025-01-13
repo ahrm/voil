@@ -84,8 +84,18 @@ export function activate(context: vscode.ExtensionContext) {
 			let { identifier, isDir, name, isNew } = parseLine(line);
 			if (isNew) {
 				let fullPath = vscode.Uri.joinPath(currentDir!, name + "/");
+
 				if (isDir) {
-					await vscode.workspace.fs.createDirectory(fullPath);
+					let pathParts = fullPath.path.split('/');
+					let isLastPartFile = pathParts[pathParts.length - 1].includes('.');
+					if (isLastPartFile){
+						let lastPartParentDir = pathParts.slice(0, pathParts.length - 1).join('/');
+						await vscode.workspace.fs.createDirectory(vscode.Uri.parse(lastPartParentDir));
+						await vscode.workspace.fs.writeFile(fullPath, new Uint8Array());
+					}
+					else{
+						await vscode.workspace.fs.createDirectory(fullPath);
+					}
 					modified = true;
 				}
 				else {
