@@ -5,6 +5,9 @@ export function activate(context: vscode.ExtensionContext) {
 	var currentDir = vscode.workspace.workspaceFolders?.[0].uri;
 	var vsoilDoc: vscode.TextDocument | undefined = undefined;
 
+	var pathToIdentifierMap: Map<string, string> = new Map();
+	var identifierToPathMap: Map<string, string> = new Map();
+
 	let getVsoilDoc = async () => {
 		if (vsoilDoc) {
 			return vsoilDoc;
@@ -14,12 +17,65 @@ export function activate(context: vscode.ExtensionContext) {
 		return vsoilDoc;
 	};
 
-	// regsiters vsoil.handleEnter command
+	let getIdentifierForPath = (path: string) => {
+		if (pathToIdentifierMap.has(path)){
+			return pathToIdentifierMap.get(path);
+		}
+		let identifier = generateRandomString(5);
+		pathToIdentifierMap.set(path, identifier);
+		identifierToPathMap.set(identifier, path);
+		return identifier;
+	}
+
+	let getPathForIdentifier = (identifier: string) => {
+		if (identifierToPathMap.has(identifier)){
+			return identifierToPathMap.get(identifier);
+		}
+		return '';
+	}
+
+	let generateRandomString = (length: number) => {
+		// generate a random alphanumeric string of length `length`
+		let result = '';
+		let characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+		let charactersLength = characters.length;
+		for (let i = 0; i < length; i++) {
+			result += characters.charAt(Math.floor(Math.random() * charactersLength));
+		}
+		return result;
+	};
+
+	const parseLine = (line: string) => {
+		let parts = line.split(' ');
+		if (parts.length == 3){
+			let identifier = parts[0];
+			let typeString = parts[1];
+			let name = parts.slice(2).join(' ');
+			return {
+				identifier: identifier,
+				isDir: typeString === '/',
+				name: name
+			};
+		}
+		else{
+			let typeString = parts[0];
+			let name = parts[1];
+			return {
+				identifier: '',
+				isDir: typeString === '/',
+				name: name
+			};
+
+		}
+	};
+
 	const handleEnter = vscode.commands.registerCommand('vsoil.handleEnter', async () => {
 		let currentCursorLineIndex = vscode.window.activeTextEditor?.selection.active.line;
 		if (currentCursorLineIndex !== undefined) {
-			let currentDirName = vsoilDoc?.getText(vsoilDoc.lineAt(currentCursorLineIndex).range).substring(2);
-			let isDir = vsoilDoc?.getText(vsoilDoc.lineAt(currentCursorLineIndex).range).startsWith('/');
+			// let currentDirName = vsoilDoc?.getText(vsoilDoc.lineAt(currentCursorLineIndex).range).substring(2);
+			// let isDir = vsoilDoc?.getText(vsoilDoc.lineAt(currentCursorLineIndex).range).startsWith('/');
+			let {identifier, isDir, name} = parseLine(vsoilDoc?.getText(vsoilDoc.lineAt(currentCursorLineIndex).range) ?? '');
+			let currentDirName = name;
 			var focusLine = '';
 
 			if (isDir){
@@ -78,11 +134,14 @@ export function activate(context: vscode.ExtensionContext) {
 		content += `/ ..\n`;
 		files.forEach((file) => {
 			let isDir = file[1] === vscode.FileType.Directory;
+			let fullPath = vscode.Uri.joinPath(rootUri!, file[0]).path;
+			let identifier = getIdentifierForPath(fullPath);
+			console.log(fullPath);
 			if (isDir){
-				content += `/ ${file[0]}\n`;
+				content += `${identifier} / ${file[0]}\n`;
 			}
 			else{
-				content += `- ${file[0]}\n`;
+				content += `${identifier} - ${file[0]}\n`;
 			}
 		});
 		let doc = await getVsoilDoc();
