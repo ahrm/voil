@@ -92,7 +92,7 @@ export function activate(context: vscode.ExtensionContext) {
 				}
 				await updateDocContentToCurrentDir();
 				if (focusLine){
-					let lineIndex = vsoilDoc?.getText().split('\n').findIndex((line) => line.startsWith(`/ ${focusLine}`));
+					let lineIndex = vsoilDoc?.getText().split('\n').findIndex((line) => line.trimEnd().endsWith(`/ ${focusLine}`));
 					if (lineIndex !== undefined && lineIndex !== -1){
 						let line = vsoilDoc?.lineAt(lineIndex);
 						if (line){
@@ -133,7 +133,6 @@ export function activate(context: vscode.ExtensionContext) {
 			let isDir = file[1] === vscode.FileType.Directory;
 			let fullPath = vscode.Uri.joinPath(rootUri!, file[0]).path;
 			let identifier = getIdentifierForPath(fullPath);
-			console.log(fullPath);
 			if (isDir){
 				content += `${identifier} / ${file[0]}\n`;
 			}
@@ -166,6 +165,13 @@ export function activate(context: vscode.ExtensionContext) {
 		await updateDocContentToCurrentDir();
 
 		await vscode.window.showTextDocument(doc);
+		// move cursor to the first line
+		let selection = new vscode.Selection(doc.positionAt(0), doc.positionAt(0));
+
+		if (vscode.window.activeTextEditor){
+			vscode.window.activeTextEditor.selection = selection;
+		}
+
 		vscode.commands.executeCommand('setContext', 'vsoilDoc', true);
 		vscode.window.onDidChangeActiveTextEditor(editor => {
 			vscode.commands.executeCommand('setContext', 'vsoilDoc', editor?.document ===  doc);
