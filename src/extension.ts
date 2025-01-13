@@ -19,17 +19,25 @@ export function activate(context: vscode.ExtensionContext) {
 		let currentCursorLineIndex = vscode.window.activeTextEditor?.selection.active.line;
 		if (currentCursorLineIndex !== undefined) {
 			let currentDirName = vsoilDoc?.getText(vsoilDoc.lineAt(currentCursorLineIndex).range).substring(2);
-			if (currentDirName === '..'){
-				currentDir = vscode.Uri.joinPath(currentDir!, '..');
+			let isDir = vsoilDoc?.getText(vsoilDoc.lineAt(currentCursorLineIndex).range).startsWith('/');
+			if (isDir){
+				if (currentDirName === '..') {
+					currentDir = vscode.Uri.joinPath(currentDir!, '..');
+				}
+				else {
+					currentDir = vscode.Uri.joinPath(currentDir!, currentDirName!);
+				}
+				if (vscode.window.activeTextEditor) {
+					vscode.window.activeTextEditor.selection = new vscode.Selection(0, 0, 0, 0);
+				}
+				await updateDocContentToCurrentDir();
 			}
 			else{
-				currentDir = vscode.Uri.joinPath(currentDir!, currentDirName!);
+				// open file
+				let fileUri = vscode.Uri.joinPath(currentDir!, currentDirName!);
+				let doc = await vscode.workspace.openTextDocument(fileUri);
+				await vscode.window.showTextDocument(doc);
 			}
-			if (vscode.window.activeTextEditor) {
-				vscode.window.activeTextEditor.selection = new vscode.Selection(0, 0, 0, 0);
-			}
-			await updateDocContentToCurrentDir();
-			// console.log(currentDirName);
 		}
 
 	});
@@ -48,7 +56,7 @@ export function activate(context: vscode.ExtensionContext) {
 			return a[1] === vscode.FileType.Directory ? -1 : 1;
 		});
 
-		content += `- ..\n`;
+		content += `/ ..\n`;
 		files.forEach((file) => {
 			let isDir = file[1] === vscode.FileType.Directory;
 			if (isDir){
