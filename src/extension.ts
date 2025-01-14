@@ -26,6 +26,16 @@ class RenamedDirectoryListingItem{
 	}
 }
 
+function getFileSizeHumanReadableName(sizeInBytes: number) {
+	const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+	let unitIndex = 0;
+	while (sizeInBytes >= 1024 && unitIndex < units.length - 1) {
+		sizeInBytes /= 1024;
+		unitIndex++;
+	}
+	return `${sizeInBytes.toFixed(2)} ${units[unitIndex]}`;
+}
+
 async function showDeleteConfirmation(
     deletedIdentifiers: Map<string, DirectoryListingData[]>, renamedIdentifiers: Map<string, RenamedDirectoryListingItem>, movedIdentifiers: Map<string, RenamedDirectoryListingItem>) {
     const panel = vscode.window.createWebviewPanel(
@@ -520,6 +530,27 @@ export function activate(context: vscode.ExtensionContext) {
 						if (previewExtensions.includes(ext)) {
 							let fileUri = vscode.Uri.joinPath(currentDir!, name);
 							let doc = await vscode.workspace.openTextDocument(fileUri);
+							await vscode.window.showTextDocument(doc, {
+								viewColumn: vscode.ViewColumn.Beside,
+								preview: true,
+								preserveFocus: true
+							});
+						}
+						else{
+							// show some general information, e.g. file size etc. in the preview window
+							let fileUri = vscode.Uri.joinPath(currentDir!, name);
+							let stats = await vscode.workspace.fs.stat(fileUri);
+							let content = `Size:\t\t\t${getFileSizeHumanReadableName(stats.size)}\n`;
+							content += `Modified:\t\t${new Date(stats.mtime).toLocaleString()}\n`;
+							content += `Created:\t\t${new Date(stats.ctime).toLocaleString()}\n`;
+							let doc = await getPreviewDoc();
+							const edit = new vscode.WorkspaceEdit();
+							const fullRange = new vscode.Range(
+								doc.positionAt(0),
+								doc.positionAt(doc.getText().length)
+							);
+							edit.replace(doc.uri, fullRange, content);
+							await vscode.workspace.applyEdit(edit);
 							await vscode.window.showTextDocument(doc, {
 								viewColumn: vscode.ViewColumn.Beside,
 								preview: true,
