@@ -436,9 +436,17 @@ export function activate(context: vscode.ExtensionContext) {
 
 		// first show directories and then files
 		files.sort((a, b) => {
+			let a_name = a[0];
+			let b_name = b[0];
+			if (a[1] !== vscode.FileType.Directory){
+				// remove extension from file name
+				a_name = a_name.split('.').slice(0, -1).join('.');
+				b_name = b_name.split('.').slice(0, -1).join('.');
+			}
+
 			if (a[1] === b[1]) {
 				// compare file names. e.g. file1.txt should come before file10.txt even though lexicographically it should be the other way around
-				return a[0].localeCompare(b[0], undefined, { numeric: true });
+				return a_name.localeCompare(b_name, undefined, { numeric: true });
 
 			}
 			return a[1] === vscode.FileType.Directory ? -1 : 1;
