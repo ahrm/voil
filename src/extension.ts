@@ -60,7 +60,7 @@ async function showDeleteConfirmation(
         movedItemsList += `<li style="color:yellow;">${movedData.oldPath} → ${movedData.newData.name}</li>`;
     }
 
-    panel.webview.html = `
+	panel.webview.html = `
         <html>
         <body>
             <h2>Are you sure you want to delete/rename/move the following files/directories?</h2>
@@ -174,7 +174,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const parseLine = (line: string): DirectoryListingData => {
 		let parts = line.split(' ');
-		if (parts.length == 3){
+		if (parts.length >= 3){
 			let identifier = parts[0];
 			let typeString = parts[1];
 			let name = parts.slice(2).join(' ').trim();
