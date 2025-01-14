@@ -486,6 +486,27 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	context.subscriptions.push(disposable);
+
+	context.subscriptions.push(
+		vscode.window.onDidChangeTextEditorSelection(async (event) => {
+			if (event.textEditor.document === vsoilDoc) {
+				let lineIndex = event.selections[0]?.active.line;
+				if (lineIndex !== undefined) {
+					let lineText = vsoilDoc.getText(vsoilDoc.lineAt(lineIndex).range);
+					let { isDir, name } = parseLine(lineText);
+					if (!isDir && name !== '..') {
+						let fileUri = vscode.Uri.joinPath(currentDir!, name);
+						let doc = await vscode.workspace.openTextDocument(fileUri);
+						await vscode.window.showTextDocument(doc, {
+							viewColumn: vscode.ViewColumn.Beside,
+							preview: true,
+							preserveFocus: true
+						});
+					}
+				}
+			}
+		})
+	);
 }
 
 // This method is called when your extension is deactivated
