@@ -26,7 +26,7 @@ class RenamedDirectoryListingItem{
 }
 
 async function showDeleteConfirmation(
-    deletedIdentifiers: Map<string, DirectoryListingData[]>, renamedIdentifiers: Map<string, RenamedDirectoryListingItem>) {
+    deletedIdentifiers: Map<string, DirectoryListingData[]>, renamedIdentifiers: Map<string, RenamedDirectoryListingItem>, movedIdentifiers: Map<string, RenamedDirectoryListingItem>) {
     const panel = vscode.window.createWebviewPanel(
         'deleteConfirmation',
         'Delete Confirmation',
@@ -36,21 +36,29 @@ async function showDeleteConfirmation(
 
     let deletedItemsList = '';
     for (let [identifier, [{ isDir, name, isNew }]] of deletedIdentifiers) {
-        deletedItemsList += `<li>${name}</li>`;
+        deletedItemsList += `<li style="color:red;">${name}</li>`;
     }
 
     let renamedItemsList = '';
     for (let [identifier, renamedData] of renamedIdentifiers) {
-        renamedItemsList += `<li>${renamedData.oldPath} → ${renamedData.newData.name}</li>`;
+        renamedItemsList += `<li style="color:green;">${renamedData.oldPath} → ${renamedData.newData.name}</li>`;
+    }
+
+    let movedItemsList = '';
+    for (let [identifier, movedData] of movedIdentifiers) {
+        movedItemsList += `<li style="color:yellow;">${movedData.oldPath} → ${movedData.newData.name}</li>`;
     }
 
     panel.webview.html = `
         <html>
         <body>
-            <h2>Are you sure you want to delete the following files/directories?</h2>
+            <h2>Are you sure you want to delete/rename/move the following files/directories?</h2>
+            <h2>Deleted Items:</h2>
             <ul>${deletedItemsList}</ul>
             <h2>Renamed Items:</h2>
             <ul>${renamedItemsList}</ul>
+            <h2>Moved Items:</h2>
+            <ul>${movedItemsList}</ul>
             <button id="noButton">No</button>
             <button id="yesButton">Yes</button>
             <script>
@@ -84,6 +92,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	var pathToIdentifierMap: Map<string, string> = new Map();
 	var identifierToPathMap: Map<string, string> = new Map();
+	var cutIdentifiers = new Set<string>();
 
 	let getVsoilDoc = async () => {
 		if (vsoilDoc) {
@@ -177,6 +186,7 @@ export function activate(context: vscode.ExtensionContext) {
 		var newIdentifiers: Map<string, DirectoryListingData[]> = getIdentifiersFromContent(content);
 
 		var copiedIdentifiers: Map<string, DirectoryListingData[]> = new Map();
+		var movedIdentifiers: Map<string, RenamedDirectoryListingItem> = new Map();
 		var renamedIdentifiers: Map<string, RenamedDirectoryListingItem> = new Map();
 
 		for (let [identifier, items] of newIdentifiers){
@@ -209,24 +219,21 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 			else{
 				if (newItems.length > 0){
-					copiedIdentifiers.set(identifier, newItems);
+					if (cutIdentifiers.has(identifier)){
+						let firstItem = newItems[0];
+						let rest = newItems.slice(1);
+						movedIdentifiers.set(identifier, new RenamedDirectoryListingItem(originalPath!, firstItem));
+						if (rest.length > 0){
+							copiedIdentifiers.set(identifier, rest);
+						}
+					}
+					else{
+						copiedIdentifiers.set(identifier, newItems);
+					}
 				}
 			}
 		}
 
-		for (let [identifier, item] of renamedIdentifiers){
-			let originalPath = getPathForIdentifier(identifier);
-			let newPath = vscode.Uri.joinPath(currentDir!, item.newData.name).path;
-			// do the rename
-			if (originalPath && newPath){
-				await vscode.workspace.fs.rename(vscode.Uri.parse(originalPath), vscode.Uri.parse(newPath));
-				// update the pathToIdentifierMap and identifierToPathMap
-				pathToIdentifierMap.delete(originalPath);
-				pathToIdentifierMap.set(newPath, identifier);
-				identifierToPathMap.delete(identifier);
-				identifierToPathMap.set(identifier, newPath);
-			}
-		}
 
 		for (let [identifier, items] of copiedIdentifiers){
 			let originalPath = getPathForIdentifier(identifier);
@@ -234,7 +241,7 @@ export function activate(context: vscode.ExtensionContext) {
 				let newPath = vscode.Uri.joinPath(currentDir!, item.name).path;
 				if (originalPath){
 					await vscode.workspace.fs.copy(vscode.Uri.parse(originalPath), vscode.Uri.parse(newPath));
-					// update the pathToIdentifierMap and identifierToPathMap
+
 					let newIdentifier = getIdentifierForPath(newPath);
 					pathToIdentifierMap.set(newPath, newIdentifier);
 					identifierToPathMap.set(newIdentifier, newPath);
@@ -242,7 +249,7 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		}
 
-		// get the identifiers that are in the original content but not in the new content
+
 		var deletedIdentifiers: Map<string, DirectoryListingData[]> = new Map();
 		for (let [identifier, obj] of originalIdentifiers){
 			if (!newIdentifiers.has(identifier)){
@@ -250,8 +257,8 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		}
 
-		if (deletedIdentifiers.size > 0 || renamedIdentifiers.size > 0){
-			let response = await showDeleteConfirmation(deletedIdentifiers, renamedIdentifiers);
+		if (deletedIdentifiers.size > 0 || renamedIdentifiers.size > 0 || movedIdentifiers.size > 0){
+			let response = await showDeleteConfirmation(deletedIdentifiers, renamedIdentifiers, movedIdentifiers);
 			// make sure the document has focus
 			await vscode.window.showTextDocument(doc);
 			if (response === 'Yes'){
@@ -272,11 +279,36 @@ export function activate(context: vscode.ExtensionContext) {
 					}
 
 				}
+				for (let [identifier, item] of renamedIdentifiers) {
+					let originalPath = getPathForIdentifier(identifier);
+					let newPath = vscode.Uri.joinPath(currentDir!, item.newData.name).path;
+					// do the rename
+					if (originalPath && newPath) {
+						await vscode.workspace.fs.rename(vscode.Uri.parse(originalPath), vscode.Uri.parse(newPath));
+
+						pathToIdentifierMap.delete(originalPath);
+						pathToIdentifierMap.set(newPath, identifier);
+						identifierToPathMap.delete(identifier);
+						identifierToPathMap.set(identifier, newPath);
+					}
+				}
+
+				for (let [identifier, item] of movedIdentifiers) {
+					let originalPath = getPathForIdentifier(identifier);
+					let newPath = vscode.Uri.joinPath(currentDir!, item.newData.name).path;
+					if (originalPath && newPath) {
+						await vscode.workspace.fs.rename(vscode.Uri.parse(originalPath), vscode.Uri.parse(newPath));
+						pathToIdentifierMap.delete(originalPath);
+						pathToIdentifierMap.set(newPath, identifier);
+						identifierToPathMap.delete(identifier);
+						identifierToPathMap.set(identifier, newPath);
+					}
+				}
 			}
 		}
 
 		let lines = content.split('\n');
-		var modified = deletedIdentifiers.size > 0 || copiedIdentifiers.size > 0 || renamedIdentifiers.size > 0;
+		var modified = deletedIdentifiers.size > 0 || copiedIdentifiers.size > 0 || renamedIdentifiers.size > 0 || movedIdentifiers.size > 0;
 		for (let line of lines){
 			if (line.trim().length === 0) {
 				continue;
@@ -311,10 +343,13 @@ export function activate(context: vscode.ExtensionContext) {
 			// identifierToPathMap.clear();
 			await updateDocContentToCurrentDir();
 		}
+
+		cutIdentifiers.clear();
 	});
 
 	const handleEnter = vscode.commands.registerCommand('vsoil.handleEnter', async () => {
 		let currentCursorLineIndex = vscode.window.activeTextEditor?.selection.active.line;
+		let prevDirectory = currentDir?.path;
 		if (currentCursorLineIndex !== undefined) {
 			let {identifier, isDir, name} = parseLine(vsoilDoc?.getText(vsoilDoc.lineAt(currentCursorLineIndex).range) ?? '');
 			let currentDirName = name;
@@ -334,7 +369,7 @@ export function activate(context: vscode.ExtensionContext) {
 						vscode.window.activeTextEditor.revealRange(new vscode.Range(0, 0, 0, 0));
 					}
 				}
-				await updateDocContentToCurrentDir();
+				await updateDocContentToCurrentDir(prevDirectory);
 				if (focusLine){
 					let lineIndex = vsoilDoc?.getText().split('\n').findIndex((line) => line.trimEnd().endsWith(`/ ${focusLine}`));
 					if (lineIndex !== undefined && lineIndex !== -1){
@@ -389,10 +424,35 @@ export function activate(context: vscode.ExtensionContext) {
 		return content;
 	}
 
-	let updateDocContentToCurrentDir = async () => {
+	let updateDocContentToCurrentDir = async (prevDirectory: string | undefined = undefined) => {
+
 		let rootUri = currentDir;
 		let content = await getContentForPath(rootUri!);
 		let doc = await getVsoilDoc();
+
+		if (prevDirectory){
+			let prevContentOnDisk = await getContentForPath(vscode.Uri.parse(prevDirectory));
+			let prevContentOnFile = doc.getText();
+
+			let diskIdentifiers = new Set<string>();
+			let fileIdentifiers = new Set<string>();
+
+			for (let line of prevContentOnDisk.split('\n')){
+				let { identifier } = parseLine(line);
+				diskIdentifiers.add(identifier);
+			}
+
+			for (let line of prevContentOnFile.split('\n')){
+				let { identifier } = parseLine(line);
+				fileIdentifiers.add(identifier);
+			}
+
+			let cutIds = new Set([...diskIdentifiers].filter(x => !fileIdentifiers.has(x)));
+			if (cutIds.size){
+				cutIdentifiers = cutIds;
+			}
+		}
+
 		// set doc content
 		const edit = new vscode.WorkspaceEdit();
 		const fullRange = new vscode.Range(
