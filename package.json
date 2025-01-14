@@ -16,6 +16,10 @@
       {
         "command": "vsoil.startvsoil",
         "title": "Open vsoil"
+      },
+      {
+        "command": "vsoil.togglePreview",
+        "title": "Toggle the vsoil preview window"
       }
     ],
     "keybindings": [
