@@ -1,5 +1,69 @@
 import * as vscode from 'vscode';
 
+class DirectoryListingData {
+	identifier: string;
+	isDir: boolean;
+	name: string;
+	isNew: boolean;
+
+	constructor(identifier: string, isDir: boolean, name: string, isNew: boolean) {
+		this.identifier = identifier;
+		this.isDir = isDir;
+		this.name = name;
+		this.isNew = isNew;
+	}
+}
+
+async function showDeleteConfirmation(
+    deletedIdentifiers: Map<string, DirectoryListingData[]>) {
+    const panel = vscode.window.createWebviewPanel(
+        'deleteConfirmation',
+        'Delete Confirmation',
+        vscode.ViewColumn.One,
+        { enableScripts: true }
+    );
+
+    let deletedItemsList = '';
+    for (let [identifier, [{ isDir, name, isNew }]] of deletedIdentifiers) {
+        deletedItemsList += `<li>${name}</li>`;
+    }
+
+    // let renamedItemsList = '';
+    // for (let [identifier, [oldData, newData]] of renamedIdentifiers) {
+    //     renamedItemsList += `<li>${oldData.name} → ${newData.name}</li>`;
+    // }
+
+    panel.webview.html = `
+        <html>
+        <body>
+            <h2>Are you sure you want to delete the following files/directories?</h2>
+            <ul>${deletedItemsList}</ul>
+            <button id="noButton">No</button>
+            <button id="yesButton">Yes</button>
+            <script>
+                const vscode = acquireVsCodeApi();
+                document.getElementById('yesButton').addEventListener('click', () => {
+                    vscode.postMessage({ command: 'yes' });
+                });
+                document.getElementById('noButton').addEventListener('click', () => {
+                    vscode.postMessage({ command: 'no' });
+                });
+                window.addEventListener('DOMContentLoaded', () => {
+                    document.getElementById('noButton').focus();
+                });
+            </script>
+        </body>
+        </html>
+    `;
+
+    return new Promise<string>((resolve) => {
+        panel.webview.onDidReceiveMessage((message) => {
+            panel.dispose();
+            resolve(message.command === 'yes' ? 'Yes' : 'No');
+        });
+    });
+}
+
 export function activate(context: vscode.ExtensionContext) {
 
 	var currentDir = vscode.workspace.workspaceFolders?.[0].uri;
@@ -35,9 +99,8 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	let generateRandomString = (length: number) => {
-		// generate a random alphanumeric string of length `length`
 		let result = '';
-		let characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+		let characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 		let charactersLength = characters.length;
 		for (let i = 0; i < length; i++) {
 			result += characters.charAt(Math.floor(Math.random() * charactersLength));
@@ -45,19 +108,6 @@ export function activate(context: vscode.ExtensionContext) {
 		return result;
 	};
 
-	class DirectoryListingData {
-		identifier: string;
-		isDir: boolean;
-		name: string;
-		isNew: boolean;
-
-		constructor(identifier: string, isDir: boolean, name: string, isNew: boolean){
-			this.identifier = identifier;
-			this.isDir = isDir;
-			this.name = name;
-			this.isNew = isNew;
-		}
-	}
 
 	const parseLine = (line: string): DirectoryListingData => {
 		let parts = line.split(' ');
@@ -87,13 +137,15 @@ export function activate(context: vscode.ExtensionContext) {
 
 
 	const getIdentifiersFromContent = (content: string) => {
-		let res: Map<string, DirectoryListingData> = new Map();
+		let res: Map<string, DirectoryListingData[]> = new Map();
 		for (let line of content.split('\n')){
 			if (line.trim().length === 0) {
 				continue;
 			}
 			let { identifier, isDir, name, isNew } = parseLine(line);
-			res.set(identifier, { identifier, isDir, name, isNew });
+			let oldList: DirectoryListingData[] = res.get(identifier) || [];
+			oldList.push({ identifier, isDir, name, isNew });
+			res.set(identifier, oldList);
 		}
 		return res;
 	};
@@ -101,27 +153,56 @@ export function activate(context: vscode.ExtensionContext) {
 	const handleSave = vscode.commands.registerCommand('vsoil.handleSave', async () => {
 		let doc = await getVsoilDoc();
 		let originalContent = await getContentForPath(currentDir!);
-		var originalIdentifiers: Map<string, DirectoryListingData> = getIdentifiersFromContent(originalContent);
+		var originalIdentifiers: Map<string, DirectoryListingData[]> = getIdentifiersFromContent(originalContent);
 		let content = doc.getText();
-		var newIdentifiers: Map<string, DirectoryListingData> = getIdentifiersFromContent(content);
+		var newIdentifiers: Map<string, DirectoryListingData[]> = getIdentifiersFromContent(content);
+
+		var copiedIdentifiers: Map<string, DirectoryListingData[]> = new Map();
+		for (let [identifier, items] of newIdentifiers){
+			let originalPath = getPathForIdentifier(identifier);
+			let newItems: DirectoryListingData[] = [];
+
+			for (let item of items){
+				let itemPath = vscode.Uri.joinPath(currentDir!, item.name).path;
+				if (originalPath && originalPath !== itemPath){
+					newItems.push(item);
+				}
+			}
+			if (newItems.length > 0){
+				copiedIdentifiers.set(identifier, newItems);
+			}
+		}
+
+		for (let [identifier, items] of copiedIdentifiers){
+			let originalPath = getPathForIdentifier(identifier);
+			let newPath = vscode.Uri.joinPath(currentDir!, items[0].name).path;
+			console.log(`Copying ${originalPath} to ${newPath}`);
+		}
 
 		// get the identifiers that are in the original content but not in the new content
-		var deletedIdentifiers: Map<string, DirectoryListingData> = new Map();
+		var deletedIdentifiers: Map<string, DirectoryListingData[]> = new Map();
 		for (let [identifier, obj] of originalIdentifiers){
 			if (!newIdentifiers.has(identifier)){
 				deletedIdentifiers.set(identifier, obj);
 			}
 		}
 
+		var renamedIdentifiers: Map<string, [DirectoryListingData, DirectoryListingData]> = new Map();
+		// for (let [identifier, obj] of newIdentifiers){
+		// 	if (originalIdentifiers.has(identifier)){
+		// 		let originalObj = originalIdentifiers.get(identifier);
+		// 		if (originalObj?.name !== obj.name){
+		// 			renamedIdentifiers.set(identifier, [originalObj!, obj]);
+		// 		}
+		// 	}
+		// }
+
 		if (deletedIdentifiers.size > 0){
-			// ask for confirmation
-			let message = 'Are you sure you want to delete the following files/directories?\n';
-			for (let [identifier, { isDir, name, isNew }] of deletedIdentifiers){
-				message += `${name}\n`;
-			}
-			let response = await vscode.window.showInformationMessage(message, 'Yes', 'No');
+			let response = await showDeleteConfirmation(deletedIdentifiers);
+			// make sure the document has focus
+			await vscode.window.showTextDocument(doc);
 			if (response === 'Yes'){
-				for (let [identifier, { isDir, name, isNew }] of deletedIdentifiers){
+				for (let [identifier, [{ isDir, name, isNew }]] of deletedIdentifiers){
 					// delete the file/directory
 					let path = getPathForIdentifier(identifier);
 					if (path){
@@ -132,6 +213,7 @@ export function activate(context: vscode.ExtensionContext) {
 							await vscode.workspace.fs.delete(vscode.Uri.parse(path));
 						}
 					}
+
 				}
 			}
 		}
