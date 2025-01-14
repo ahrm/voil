@@ -28,7 +28,18 @@
         "key": "ctrl+s",
         "when": "editorTextFocus && vsoilDoc"
       }
-    ]
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "VSOIL",
+      "properties": {
+        "vsoil.previewExtensions": {
+          "type": "array",
+          "default": [".txt", ".sh", ".bat", ".py", ".c", ".cpp", ".ts", ".js", ".java", ".rb", ".go"],
+          "description": "File extensions that vsoil will preview automatically."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

@@ -1,5 +1,6 @@
 import { rename } from 'fs';
 import * as vscode from 'vscode';
+import * as path from 'path';
 
 class DirectoryListingData {
 	identifier: string;
@@ -499,18 +500,23 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.window.onDidChangeTextEditorSelection(async (event) => {
 			if (previewEnabled && event.textEditor.document === vsoilDoc) {
+				let config = vscode.workspace.getConfiguration('vsoil');
+				let previewExtensions = config.get<string[]>('previewExtensions') ?? [];
 				let lineIndex = event.selections[0]?.active.line;
 				if (lineIndex !== undefined) {
 					let lineText = vsoilDoc.getText(vsoilDoc.lineAt(lineIndex).range);
 					let { isDir, name } = parseLine(lineText);
 					if (!isDir && name !== '..') {
-						let fileUri = vscode.Uri.joinPath(currentDir!, name);
-						let doc = await vscode.workspace.openTextDocument(fileUri);
-						await vscode.window.showTextDocument(doc, {
-							viewColumn: vscode.ViewColumn.Beside,
-							preview: true,
-							preserveFocus: true
-						});
+						let ext = path.extname(name);
+						if (previewExtensions.includes(ext)) {
+							let fileUri = vscode.Uri.joinPath(currentDir!, name);
+							let doc = await vscode.workspace.openTextDocument(fileUri);
+							await vscode.window.showTextDocument(doc, {
+								viewColumn: vscode.ViewColumn.Beside,
+								preview: true,
+								preserveFocus: true
+							});
+						}
 					}
 				}
 			}
