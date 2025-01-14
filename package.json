@@ -41,6 +41,11 @@
           "type": "array",
           "default": [".txt", ".sh", ".bat", ".py", ".c", ".cpp", ".ts", ".js", ".java", ".rb", ".go"],
           "description": "File extensions that vsoil will preview automatically."
+        },
+        "vsoil.previewAutoOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically open the preview window when the vsoil window is opened."
         }
       }
     }

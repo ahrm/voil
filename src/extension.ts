@@ -106,7 +106,9 @@ export function activate(context: vscode.ExtensionContext) {
 	var identifierToPathMap: Map<string, string> = new Map();
 	var cutIdentifiers = new Set<string>();
 
-	let previewEnabled = false;
+	let config = vscode.workspace.getConfiguration('vsoil');
+	// let previewEnabled = false;
+	let previewEnabled = config.get<boolean>('previewAutoOpen') ?? false;
 
 	const togglePreview = vscode.commands.registerCommand('vsoil.togglePreview', () => {
 		previewEnabled = !previewEnabled;
@@ -540,7 +542,6 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.window.onDidChangeTextEditorSelection(async (event) => {
 			if (previewEnabled && event.textEditor.document === vsoilDoc) {
-				let config = vscode.workspace.getConfiguration('vsoil');
 				let previewExtensions = config.get<string[]>('previewExtensions') ?? [];
 				let lineIndex = event.selections[0]?.active.line;
 				if (lineIndex !== undefined) {
