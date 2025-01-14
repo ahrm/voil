@@ -1,3 +1,8 @@
+// todo: when launched, we should save the current view state, when we select a file, we should restore the view state with the selected file opened only in the active window in the original view state
+// todo: syntax highlight 
+// todo: add an option to run a command line program on selected items
+// todo: make sure vsoil documents are closed after we are done
+
 import { rename } from 'fs';
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -101,6 +106,7 @@ export function activate(context: vscode.ExtensionContext) {
 	var currentDir = vscode.workspace.workspaceFolders?.[0].uri;
 	var vsoilDoc: vscode.TextDocument | undefined = undefined;
 	var previewDoc: vscode.TextDocument | undefined = undefined;
+	var previewTextEditor: vscode.TextEditor | undefined = undefined;
 
 	var pathToIdentifierMap: Map<string, string> = new Map();
 	var identifierToPathMap: Map<string, string> = new Map();
@@ -113,6 +119,11 @@ export function activate(context: vscode.ExtensionContext) {
 	const togglePreview = vscode.commands.registerCommand('vsoil.togglePreview', () => {
 		previewEnabled = !previewEnabled;
 	});
+
+	const hidePreviewWindow = async  () =>{
+		// make sure single column layout is active
+		await vscode.commands.executeCommand('workbench.action.editorLayoutSingle');
+	};
 
 	const openCurrentDirectory = vscode.commands.registerCommand('vsoil.openCurrentDirectory', () => {
 		if (currentDir) {
@@ -428,6 +439,7 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 			else{
 				// open file
+				await hidePreviewWindow();
 				let fileUri = vscode.Uri.joinPath(currentDir!, currentDirName!);
 				let doc = await vscode.workspace.openTextDocument(fileUri);
 				await vscode.window.showTextDocument(doc);
@@ -552,7 +564,7 @@ export function activate(context: vscode.ExtensionContext) {
 						if (previewExtensions.includes(ext)) {
 							let fileUri = vscode.Uri.joinPath(currentDir!, name);
 							let doc = await vscode.workspace.openTextDocument(fileUri);
-							await vscode.window.showTextDocument(doc, {
+							previewTextEditor = await vscode.window.showTextDocument(doc, {
 								viewColumn: vscode.ViewColumn.Beside,
 								preview: true,
 								preserveFocus: true
@@ -573,7 +585,7 @@ export function activate(context: vscode.ExtensionContext) {
 							);
 							edit.replace(doc.uri, fullRange, content);
 							await vscode.workspace.applyEdit(edit);
-							await vscode.window.showTextDocument(doc, {
+							previewTextEditor = await vscode.window.showTextDocument(doc, {
 								viewColumn: vscode.ViewColumn.Beside,
 								preview: true,
 								preserveFocus: true
@@ -592,7 +604,7 @@ export function activate(context: vscode.ExtensionContext) {
 						);
 						edit.replace(doc.uri, fullRange, content);
 						await vscode.workspace.applyEdit(edit);
-						await vscode.window.showTextDocument(doc, {
+						previewTextEditor = await vscode.window.showTextDocument(doc, {
 							viewColumn: vscode.ViewColumn.Beside,
 							preview: true,
 							preserveFocus: true
