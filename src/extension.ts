@@ -96,7 +96,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	let getIdentifierForPath = (path: string) => {
 		if (pathToIdentifierMap.has(path)){
-			return pathToIdentifierMap.get(path);
+			return pathToIdentifierMap.get(path)!;
 		}
 		let stringSize = 7;
 		let identifier = generateRandomString(stringSize);
@@ -181,6 +181,8 @@ export function activate(context: vscode.ExtensionContext) {
 
 		for (let [identifier, items] of newIdentifiers){
 			let originalPath = getPathForIdentifier(identifier);
+			let originalParentPath = originalPath?.split('/').slice(0, -1).join('/');
+			let isCurrentDirTheSameAsOriginal = currentDir?.path === originalParentPath;
 			let newItems: DirectoryListingData[] = [];
 			let originalExists = false;
 
@@ -194,13 +196,21 @@ export function activate(context: vscode.ExtensionContext) {
 				}
 			}
 
-			if (!originalExists && newItems.length > 0 && originalPath){
-				renamedIdentifiers.set(identifier, new RenamedDirectoryListingItem(originalPath, newItems[0]));
-				newItems = newItems.slice(1);
-			}
+			if (isCurrentDirTheSameAsOriginal){
 
-			if (newItems.length > 0){
-				copiedIdentifiers.set(identifier, newItems);
+				if (!originalExists && newItems.length > 0 && originalPath) {
+					renamedIdentifiers.set(identifier, new RenamedDirectoryListingItem(originalPath, newItems[0]));
+					newItems = newItems.slice(1);
+				}
+
+				if (newItems.length > 0) {
+					copiedIdentifiers.set(identifier, newItems);
+				}
+			}
+			else{
+				if (newItems.length > 0){
+					copiedIdentifiers.set(identifier, newItems);
+				}
 			}
 		}
 
@@ -210,6 +220,11 @@ export function activate(context: vscode.ExtensionContext) {
 			// do the rename
 			if (originalPath && newPath){
 				await vscode.workspace.fs.rename(vscode.Uri.parse(originalPath), vscode.Uri.parse(newPath));
+				// update the pathToIdentifierMap and identifierToPathMap
+				pathToIdentifierMap.delete(originalPath);
+				pathToIdentifierMap.set(newPath, identifier);
+				identifierToPathMap.delete(identifier);
+				identifierToPathMap.set(identifier, newPath);
 			}
 		}
 
@@ -219,6 +234,10 @@ export function activate(context: vscode.ExtensionContext) {
 				let newPath = vscode.Uri.joinPath(currentDir!, item.name).path;
 				if (originalPath){
 					await vscode.workspace.fs.copy(vscode.Uri.parse(originalPath), vscode.Uri.parse(newPath));
+					// update the pathToIdentifierMap and identifierToPathMap
+					let newIdentifier = getIdentifierForPath(newPath);
+					pathToIdentifierMap.set(newPath, newIdentifier);
+					identifierToPathMap.set(newIdentifier, newPath);
 				}
 			}
 		}
@@ -246,6 +265,10 @@ export function activate(context: vscode.ExtensionContext) {
 						else {
 							await vscode.workspace.fs.delete(vscode.Uri.parse(path));
 						}
+
+						pathToIdentifierMap.delete(path);
+						identifierToPathMap.delete(identifier);
+
 					}
 
 				}
@@ -284,8 +307,8 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 
 		if (modified){
-			pathToIdentifierMap.clear();
-			identifierToPathMap.clear();
+			// pathToIdentifierMap.clear();
+			// identifierToPathMap.clear();
 			await updateDocContentToCurrentDir();
 		}
 	});
