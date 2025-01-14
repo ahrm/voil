@@ -90,6 +90,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	var currentDir = vscode.workspace.workspaceFolders?.[0].uri;
 	var vsoilDoc: vscode.TextDocument | undefined = undefined;
+	var previewDoc: vscode.TextDocument | undefined = undefined;
 
 	var pathToIdentifierMap: Map<string, string> = new Map();
 	var identifierToPathMap: Map<string, string> = new Map();
@@ -111,6 +112,14 @@ export function activate(context: vscode.ExtensionContext) {
 		// vsoilDoc = await vscode.workspace.openTextDocument({ content: '' });
 		vsoilDoc = await vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:Vsoil'));
 		return vsoilDoc;
+	};
+
+	let getPreviewDoc = async () => {
+		if (previewDoc) {
+			return previewDoc;
+		}
+		previewDoc = await vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:Vsoil:preview'));
+		return previewDoc;
 	};
 
 	let getIdentifierForPath = (path: string) => {
@@ -517,6 +526,24 @@ export function activate(context: vscode.ExtensionContext) {
 								preserveFocus: true
 							});
 						}
+					}
+					else{
+						// show the directory listing in previewDoc
+						let dirPath = vscode.Uri.joinPath(currentDir!, name);
+						let content = await getContentForPath(dirPath);
+						let doc = await getPreviewDoc();
+						const edit = new vscode.WorkspaceEdit();
+						const fullRange = new vscode.Range(
+							doc.positionAt(0),
+							doc.positionAt(doc.getText().length)
+						);
+						edit.replace(doc.uri, fullRange, content);
+						await vscode.workspace.applyEdit(edit);
+						await vscode.window.showTextDocument(doc, {
+							viewColumn: vscode.ViewColumn.Beside,
+							preview: true,
+							preserveFocus: true
+						});
 					}
 				}
 			}
