@@ -1,3 +1,4 @@
+import { rename } from 'fs';
 import * as vscode from 'vscode';
 
 class DirectoryListingData {
@@ -14,8 +15,18 @@ class DirectoryListingData {
 	}
 }
 
+class RenamedDirectoryListingItem{
+	oldPath: string;
+	newData: DirectoryListingData;
+
+	constructor(oldPath: string, newData: DirectoryListingData) {
+		this.oldPath = oldPath;
+		this.newData = newData;
+	}
+}
+
 async function showDeleteConfirmation(
-    deletedIdentifiers: Map<string, DirectoryListingData[]>) {
+    deletedIdentifiers: Map<string, DirectoryListingData[]>, renamedIdentifiers: Map<string, RenamedDirectoryListingItem>) {
     const panel = vscode.window.createWebviewPanel(
         'deleteConfirmation',
         'Delete Confirmation',
@@ -28,16 +39,18 @@ async function showDeleteConfirmation(
         deletedItemsList += `<li>${name}</li>`;
     }
 
-    // let renamedItemsList = '';
-    // for (let [identifier, [oldData, newData]] of renamedIdentifiers) {
-    //     renamedItemsList += `<li>${oldData.name} → ${newData.name}</li>`;
-    // }
+    let renamedItemsList = '';
+    for (let [identifier, renamedData] of renamedIdentifiers) {
+        renamedItemsList += `<li>${renamedData.oldPath} → ${renamedData.newData.name}</li>`;
+    }
 
     panel.webview.html = `
         <html>
         <body>
             <h2>Are you sure you want to delete the following files/directories?</h2>
             <ul>${deletedItemsList}</ul>
+            <h2>Renamed Items:</h2>
+            <ul>${renamedItemsList}</ul>
             <button id="noButton">No</button>
             <button id="yesButton">Yes</button>
             <script>
@@ -85,7 +98,13 @@ export function activate(context: vscode.ExtensionContext) {
 		if (pathToIdentifierMap.has(path)){
 			return pathToIdentifierMap.get(path);
 		}
-		let identifier = generateRandomString(5);
+		let stringSize = 7;
+		let identifier = generateRandomString(stringSize);
+
+		while (identifierToPathMap.has(identifier)){
+			identifier = generateRandomString(stringSize);
+		}
+
 		pathToIdentifierMap.set(path, identifier);
 		identifierToPathMap.set(identifier, path);
 		return identifier;
@@ -158,25 +177,50 @@ export function activate(context: vscode.ExtensionContext) {
 		var newIdentifiers: Map<string, DirectoryListingData[]> = getIdentifiersFromContent(content);
 
 		var copiedIdentifiers: Map<string, DirectoryListingData[]> = new Map();
+		var renamedIdentifiers: Map<string, RenamedDirectoryListingItem> = new Map();
+
 		for (let [identifier, items] of newIdentifiers){
 			let originalPath = getPathForIdentifier(identifier);
 			let newItems: DirectoryListingData[] = [];
+			let originalExists = false;
 
 			for (let item of items){
 				let itemPath = vscode.Uri.joinPath(currentDir!, item.name).path;
 				if (originalPath && originalPath !== itemPath){
 					newItems.push(item);
 				}
+				else{
+					originalExists = true;
+				}
 			}
+
+			if (!originalExists && newItems.length > 0 && originalPath){
+				renamedIdentifiers.set(identifier, new RenamedDirectoryListingItem(originalPath, newItems[0]));
+				newItems = newItems.slice(1);
+			}
+
 			if (newItems.length > 0){
 				copiedIdentifiers.set(identifier, newItems);
 			}
 		}
 
+		for (let [identifier, item] of renamedIdentifiers){
+			let originalPath = getPathForIdentifier(identifier);
+			let newPath = vscode.Uri.joinPath(currentDir!, item.newData.name).path;
+			// do the rename
+			if (originalPath && newPath){
+				await vscode.workspace.fs.rename(vscode.Uri.parse(originalPath), vscode.Uri.parse(newPath));
+			}
+		}
+
 		for (let [identifier, items] of copiedIdentifiers){
 			let originalPath = getPathForIdentifier(identifier);
-			let newPath = vscode.Uri.joinPath(currentDir!, items[0].name).path;
-			console.log(`Copying ${originalPath} to ${newPath}`);
+			for (let item of items){
+				let newPath = vscode.Uri.joinPath(currentDir!, item.name).path;
+				if (originalPath){
+					await vscode.workspace.fs.copy(vscode.Uri.parse(originalPath), vscode.Uri.parse(newPath));
+				}
+			}
 		}
 
 		// get the identifiers that are in the original content but not in the new content
@@ -187,18 +231,8 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		}
 
-		var renamedIdentifiers: Map<string, [DirectoryListingData, DirectoryListingData]> = new Map();
-		// for (let [identifier, obj] of newIdentifiers){
-		// 	if (originalIdentifiers.has(identifier)){
-		// 		let originalObj = originalIdentifiers.get(identifier);
-		// 		if (originalObj?.name !== obj.name){
-		// 			renamedIdentifiers.set(identifier, [originalObj!, obj]);
-		// 		}
-		// 	}
-		// }
-
-		if (deletedIdentifiers.size > 0){
-			let response = await showDeleteConfirmation(deletedIdentifiers);
+		if (deletedIdentifiers.size > 0 || renamedIdentifiers.size > 0){
+			let response = await showDeleteConfirmation(deletedIdentifiers, renamedIdentifiers);
 			// make sure the document has focus
 			await vscode.window.showTextDocument(doc);
 			if (response === 'Yes'){
@@ -219,7 +253,7 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 
 		let lines = content.split('\n');
-		var modified = false;
+		var modified = deletedIdentifiers.size > 0 || copiedIdentifiers.size > 0 || renamedIdentifiers.size > 0;
 		for (let line of lines){
 			if (line.trim().length === 0) {
 				continue;
@@ -250,6 +284,8 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 
 		if (modified){
+			pathToIdentifierMap.clear();
+			identifierToPathMap.clear();
 			await updateDocContentToCurrentDir();
 		}
 	});
