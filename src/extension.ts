@@ -110,7 +110,13 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const togglePreview = vscode.commands.registerCommand('vsoil.togglePreview', () => {
 		previewEnabled = !previewEnabled;
-		// vscode.window.showInformationMessage(`Preview ${previewEnabled ? 'enabled' : 'disabled'}`);
+	});
+
+	const openCurrentDirectory = vscode.commands.registerCommand('vsoil.openCurrentDirectory', () => {
+		if (currentDir) {
+			// open the operating system's file explorer in the current directory
+			vscode.env.openExternal(vscode.Uri.file(currentDir.path));
+		}
 	});
 
 	context.subscriptions.push(togglePreview);

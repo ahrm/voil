@@ -20,6 +20,10 @@
       {
         "command": "vsoil.togglePreview",
         "title": "Toggle the vsoil preview window"
+      },
+      {
+        "command": "vsoil.openCurrentDirectory",
+        "title": "vsoil: Open the current directory in the default file explorer"
       }
     ],
     "keybindings": [
