@@ -445,8 +445,10 @@ export function activate(context: vscode.ExtensionContext) {
 			let b_name = b[0];
 			if (a[1] !== vscode.FileType.Directory){
 				// remove extension from file name
-				a_name = a_name.split('.').slice(0, -1).join('.');
-				b_name = b_name.split('.').slice(0, -1).join('.');
+				let a_parts = a_name.split('.');
+				let b_parts = b_name.split('.');
+				a_name = a_parts.length === 1 ? a_name : a_name.split('.').slice(0, -1).join('.');
+				b_name = b_parts.length === 1 ? b_name : b_name.split('.').slice(0, -1).join('.');
 			}
 
 			if (a[1] === b[1]) {
