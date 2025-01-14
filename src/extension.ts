@@ -173,8 +173,13 @@ export function activate(context: vscode.ExtensionContext) {
 
 
 	const parseLine = (line: string): DirectoryListingData => {
+		// find the first index of '-' or '/'
+		let regexp = new RegExp('[-/]');
+		let index = line.search(regexp);
+		let hasIdentifier = index !== 0;
+
 		let parts = line.split(' ');
-		if (parts.length >= 3){
+		if (hasIdentifier){
 			let identifier = parts[0];
 			let typeString = parts[1];
 			let name = parts.slice(2).join(' ').trim();
