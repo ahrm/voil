@@ -12,6 +12,21 @@
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
+    "languages": [
+      {
+        "id": "vsoil",
+        "extensions": [
+          ".vsoil"
+        ]
+      }
+    ],
+    "grammars": [
+      {
+        "language": "vsoil",
+        "scopeName": "source.vsoil",
+        "path": "./syntaxes/vsoil.tmGrammar.json"
+      }
+    ],
     "commands": [
       {
         "command": "vsoil.openPanelWithPreview",
@@ -57,6 +72,37 @@
         "when": "editorTextFocus && vsoilDoc"
       }
     ],
+    "configurationDefaults": {
+      "editor.tokenColorCustomizations": {
+          "textMateRules": [
+            {
+              "scope": "vsoil.filetype.txt",
+              "settings": {
+                "foreground": "#96fe96"
+              }
+            },
+            {
+              "scope": "vsoil.dirtype.dir",
+              "settings": {
+                "foreground": "#a6a6ff"
+              }
+            },
+            {
+              "scope": "vsoil.filetype.code",
+              "settings": {
+                "foreground": "#edbbff"
+              }
+            },
+            {
+              "scope": "vsoil.filetype.generic",
+              "settings": {
+                "foreground": "#fbb5b5"
+              }
+            }
+          ]
+      }
+
+    },
     "configuration": {
       "type": "object",
       "title": "VSOIL",
