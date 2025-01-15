@@ -15,11 +15,19 @@
     "commands": [
       {
         "command": "vsoil.openPanelWithPreview",
-        "title": "vsoil: Open vsoil panel with preview"
+        "title": "vsoil: Open vsoil panel with preview at workspace root"
       },
       {
         "command": "vsoil.openPanel",
-        "title": "vsoil: Open vsoil panel"
+        "title": "vsoil: Open vsoil panel at workspace root"
+      },
+      {
+        "command": "vsoil.openPanelWithPreviewCurrentDir",
+        "title": "vsoil: Open vsoil panel with preview at current directory"
+      },
+      {
+        "command": "vsoil.openPanelCurrentDir",
+        "title": "vsoil: Open vsoil panel at current directory"
       },
       {
         "command": "vsoil.togglePreview",

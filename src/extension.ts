@@ -623,8 +623,9 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.executeCommand('setContext', 'vsoilDoc', editor?.document.uri.fsPath.endsWith('.vsoil'));
     });
 
-    const handleStartVsoil = async (doc: VsoilDoc) => {
-        doc.currentDir = vscode.workspace.workspaceFolders?.[0].uri!;
+    const handleStartVsoil = async (doc: VsoilDoc, initialUri: vscode.Uri) => {
+        // doc.currentDir = vscode.workspace.workspaceFolders?.[0].uri!;
+        doc.currentDir = initialUri;
         await updateDocContentToCurrentDir(doc);
 
         await vscode.window.showTextDocument(doc.doc);
@@ -640,14 +641,31 @@ export function activate(context: vscode.ExtensionContext) {
 
     const openVsoilDoc = vscode.commands.registerCommand('vsoil.openPanel', async () => {
         let doc = await newVsoilDoc();
-        await handleStartVsoil(doc);
+        await handleStartVsoil(doc, vscode.workspace.workspaceFolders?.[0].uri!);
     });
 
     const startVsoilCommand = vscode.commands.registerCommand('vsoil.openPanelWithPreview', async () => {
 
         saveCurrentEditorLayout();
         let doc = await getVsoilDoc();
-        await handleStartVsoil(doc);
+        await handleStartVsoil(doc, vscode.workspace.workspaceFolders?.[0].uri!);
+
+    });
+
+    const openVsoilDocCurrentDir = vscode.commands.registerCommand('vsoil.openPanelCurrentDir', async () => {
+        let doc = await newVsoilDoc();
+        let currentDocumentPath = vscode.window.activeTextEditor?.document.uri;
+        let parentUri = vscode.Uri.joinPath(currentDocumentPath!, '..');
+        await handleStartVsoil(doc, parentUri);
+    });
+
+    const startVsoilCommandCurrentDir = vscode.commands.registerCommand('vsoil.openPanelWithPreviewCurrentDir', async () => {
+
+        saveCurrentEditorLayout();
+        let currentDocumentPath = vscode.window.activeTextEditor?.document.uri;
+        let parentUri = vscode.Uri.joinPath(currentDocumentPath!, '..');
+        let doc = await getVsoilDoc();
+        await handleStartVsoil(doc, parentUri);
 
     });
 
