@@ -612,29 +612,6 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(startVsoilCommand);
 
-    const getBesideColumn = (column: vscode.ViewColumn) => {
-        switch (column) {
-            case vscode.ViewColumn.One:
-                return vscode.ViewColumn.Two;
-            case vscode.ViewColumn.Two:
-                return vscode.ViewColumn.Three;
-            case vscode.ViewColumn.Three:
-                return vscode.ViewColumn.Four;
-            case vscode.ViewColumn.Four:
-                return vscode.ViewColumn.Five;
-            case vscode.ViewColumn.Five:
-                return vscode.ViewColumn.Six;
-            case vscode.ViewColumn.Six:
-                return vscode.ViewColumn.Seven;
-            case vscode.ViewColumn.Seven:
-                return vscode.ViewColumn.Eight;
-            case vscode.ViewColumn.Eight:
-                return vscode.ViewColumn.Nine;
-            default:
-                return vscode.ViewColumn.One;
-        }
-    };
-
     context.subscriptions.push(
         vscode.window.onDidChangeTextEditorSelection(async (event) => {
             if (previewEnabled && event.textEditor.document === vsoilDoc) {
