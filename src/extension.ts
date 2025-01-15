@@ -1,6 +1,5 @@
 // todo: syntax highlight 
 // todo: add an option to run a command line program on selected items
-// todo: make sure vsoil documents are closed after we are done
 
 import { rename } from 'fs';
 import * as vscode from 'vscode';
@@ -174,8 +173,35 @@ export function activate(context: vscode.ExtensionContext) {
             restoreEditorLayout();
         }
     };
+
+    const closeNonVisibleVsoilDocs = async () => {
+        let docsToClose = [];
+        if (vsoilPanel){
+            let isVisible = vscode.window.visibleTextEditors.some((editor) => editor.document === vsoilPanel?.doc);
+            if (!isVisible){
+                docsToClose.push(vsoilPanel.doc);
+                vsoilPanel = undefined;
+            }
+        }
+        let docsToKeep = [];
+        for (let doc of vsoilDocs){
+            let isVisible = vscode.window.visibleTextEditors.some((editor) => editor.document === doc.doc);
+            if (isVisible){
+                docsToKeep.push(doc);
+            }
+            else{
+                docsToClose.push(doc.doc);
+            }
+        }
+        vsoilDocs = docsToKeep;
+        for (let doc of docsToClose){
+            await vscode.window.showTextDocument(doc).then(async () => {
+                await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+            });
+        }
+    };
+
     const debugCommand = vscode.commands.registerCommand('vsoil.debug', () => {
-        // printCurrentEditorLayout();
     });
 
     const saveLayoutCommand = vscode.commands.registerCommand('vsoil.saveLayout', () => {
@@ -653,7 +679,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     const startVsoilCommand = vscode.commands.registerCommand('vsoil.openPanelWithPreview', async () => {
 
-        saveCurrentEditorLayout();
+        await saveCurrentEditorLayout();
         let doc = await getVsoilDoc();
         await handleStartVsoil(doc, vscode.workspace.workspaceFolders?.[0].uri!);
 
@@ -669,7 +695,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     const startVsoilCommandCurrentDir = vscode.commands.registerCommand('vsoil.openPanelWithPreviewCurrentDir', async () => {
 
-        saveCurrentEditorLayout();
+        await saveCurrentEditorLayout();
         let currentDocumentPath = vscode.window.activeTextEditor?.document.uri;
         let parentUri = vscode.Uri.joinPath(currentDocumentPath!, '..');
         let currentDocumentName = path.basename(currentDocumentPath!.path);
