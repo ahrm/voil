@@ -623,7 +623,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.executeCommand('setContext', 'vsoilDoc', editor?.document.uri.fsPath.endsWith('.vsoil'));
     });
 
-    const handleStartVsoil = async (doc: VsoilDoc, initialUri: vscode.Uri) => {
+    const handleStartVsoil = async (doc: VsoilDoc, initialUri: vscode.Uri, fileToFocus: string | undefined = undefined) => {
         // doc.currentDir = vscode.workspace.workspaceFolders?.[0].uri!;
         doc.currentDir = initialUri;
         await updateDocContentToCurrentDir(doc);
@@ -631,6 +631,13 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.showTextDocument(doc.doc);
         // move cursor to the first line
         let selection = new vscode.Selection(doc.doc.positionAt(0), doc.doc.positionAt(0));
+        if (fileToFocus){
+            let lineIndex = doc.doc.getText().split('\n').findIndex((line) => line.trimEnd().endsWith(fileToFocus));
+            if (lineIndex !== undefined && lineIndex !== -1){
+                let line = doc.doc.lineAt(lineIndex);
+                selection = new vscode.Selection(line.range.start, line.range.start);
+            }
+        }
 
         if (vscode.window.activeTextEditor){
             vscode.window.activeTextEditor.selection = selection;
@@ -655,8 +662,9 @@ export function activate(context: vscode.ExtensionContext) {
     const openVsoilDocCurrentDir = vscode.commands.registerCommand('vsoil.openPanelCurrentDir', async () => {
         let doc = await newVsoilDoc();
         let currentDocumentPath = vscode.window.activeTextEditor?.document.uri;
+        let currentDocumentName = path.basename(currentDocumentPath!.path);
         let parentUri = vscode.Uri.joinPath(currentDocumentPath!, '..');
-        await handleStartVsoil(doc, parentUri);
+        await handleStartVsoil(doc, parentUri, currentDocumentName);
     });
 
     const startVsoilCommandCurrentDir = vscode.commands.registerCommand('vsoil.openPanelWithPreviewCurrentDir', async () => {
@@ -664,8 +672,9 @@ export function activate(context: vscode.ExtensionContext) {
         saveCurrentEditorLayout();
         let currentDocumentPath = vscode.window.activeTextEditor?.document.uri;
         let parentUri = vscode.Uri.joinPath(currentDocumentPath!, '..');
+        let currentDocumentName = path.basename(currentDocumentPath!.path);
         let doc = await getVsoilDoc();
-        await handleStartVsoil(doc, parentUri);
+        await handleStartVsoil(doc, parentUri, currentDocumentName);
 
     });
 
