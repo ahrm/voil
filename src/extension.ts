@@ -101,6 +101,22 @@ async function showDeleteConfirmation(
     });
 }
 
+type EditorLayout = {
+  groups?: EditorLayoutGroup[];
+  /* 0 - horizontal , 1 - vertical */
+  orientation: 0 | 1;
+};
+
+type EditorLayoutGroup = {
+  groups?: EditorLayoutGroup[];
+  size: number;
+};
+
+type SavedEditorLayout = {
+	layout: EditorLayout;
+	visibleDocuments: vscode.TextDocument[];
+};
+
 export function activate(context: vscode.ExtensionContext) {
 
 	var currentDir = vscode.workspace.workspaceFolders?.[0].uri;
@@ -120,10 +136,49 @@ export function activate(context: vscode.ExtensionContext) {
 		previewEnabled = !previewEnabled;
 	});
 
-	const hidePreviewWindow = async  () =>{
-		// make sure single column layout is active
-		await vscode.commands.executeCommand('workbench.action.editorLayoutSingle');
+
+	var savedEditorLayout: SavedEditorLayout | undefined = undefined;
+
+	const saveCurrentEditorLayout = async () =>{
+		const layout = await vscode.commands.executeCommand('vscode.getEditorLayout') as EditorLayout;
+		const visibleDocuments = vscode.window.visibleTextEditors.map((editor) => editor.document);
+		savedEditorLayout = {
+			layout: layout,
+			visibleDocuments: visibleDocuments
+		};
+
 	};
+
+	const restoreEditorLayout = async () => {
+		if (savedEditorLayout){
+			await vscode.commands.executeCommand('vscode.setEditorLayout', savedEditorLayout.layout);
+			let column = 1;
+			let activeColumn = vscode.window.activeTextEditor?.viewColumn;
+			for (let doc of savedEditorLayout.visibleDocuments){
+				if (column !== activeColumn){
+					await vscode.window.showTextDocument(doc, { viewColumn: column });
+				}
+				column += 1;
+			}
+		}
+	};
+
+	const hidePreviewWindow = async  () =>{
+		if (previewEnabled){
+			restoreEditorLayout();
+		}
+	};
+	const debugCommand = vscode.commands.registerCommand('vsoil.debug', () => {
+		// printCurrentEditorLayout();
+	});
+
+	const saveLayoutCommand = vscode.commands.registerCommand('vsoil.saveLayout', () => {
+		saveCurrentEditorLayout();
+	});
+
+	const restoreLayoutCommand = vscode.commands.registerCommand('vsoil.restoreLayout', () => {
+		restoreEditorLayout();
+	});
 
 	const openCurrentDirectory = vscode.commands.registerCommand('vsoil.openCurrentDirectory', () => {
 		if (currentDir) {
@@ -139,7 +194,7 @@ export function activate(context: vscode.ExtensionContext) {
 			return vsoilDoc;
 		}
 		// vsoilDoc = await vscode.workspace.openTextDocument({ content: '' });
-		vsoilDoc = await vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:Vsoil'));
+		vsoilDoc = await vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:Vsoil.vsoil'));
 		return vsoilDoc;
 	};
 
@@ -147,7 +202,7 @@ export function activate(context: vscode.ExtensionContext) {
 		if (previewDoc) {
 			return previewDoc;
 		}
-		previewDoc = await vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:Vsoil:preview'));
+		previewDoc = await vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:Vsoil:preview.vsoil'));
 		return previewDoc;
 	};
 
@@ -527,8 +582,9 @@ export function activate(context: vscode.ExtensionContext) {
 		await vscode.workspace.applyEdit(edit);
 	};
 
-	const disposable = vscode.commands.registerCommand('vsoil.startvsoil', async () => {
+	const startVsoilCommand = vscode.commands.registerCommand('vsoil.start', async () => {
 
+		saveCurrentEditorLayout();
 
 		let doc = await getVsoilDoc();
 		currentDir = vscode.workspace.workspaceFolders?.[0].uri;
@@ -549,7 +605,30 @@ export function activate(context: vscode.ExtensionContext) {
 
 	});
 
-	context.subscriptions.push(disposable);
+	context.subscriptions.push(startVsoilCommand);
+
+	const getBesideColumn = (column: vscode.ViewColumn) => {
+		switch (column) {
+			case vscode.ViewColumn.One:
+				return vscode.ViewColumn.Two;
+			case vscode.ViewColumn.Two:
+				return vscode.ViewColumn.Three;
+			case vscode.ViewColumn.Three:
+				return vscode.ViewColumn.Four;
+			case vscode.ViewColumn.Four:
+				return vscode.ViewColumn.Five;
+			case vscode.ViewColumn.Five:
+				return vscode.ViewColumn.Six;
+			case vscode.ViewColumn.Six:
+				return vscode.ViewColumn.Seven;
+			case vscode.ViewColumn.Seven:
+				return vscode.ViewColumn.Eight;
+			case vscode.ViewColumn.Eight:
+				return vscode.ViewColumn.Nine;
+			default:
+				return vscode.ViewColumn.One;
+		}
+	};
 
 	context.subscriptions.push(
 		vscode.window.onDidChangeTextEditorSelection(async (event) => {

@@ -14,12 +14,24 @@
   "contributes": {
     "commands": [
       {
-        "command": "vsoil.startvsoil",
-        "title": "Open vsoil"
+        "command": "vsoil.start",
+        "title": "vsoil: Open vsoil"
       },
       {
         "command": "vsoil.togglePreview",
-        "title": "Toggle the vsoil preview window"
+        "title": "vsoil: Toggle the vsoil preview window"
+      },
+      {
+        "command": "vsoil.debug",
+        "title": "vsoil: debug"
+      },
+      {
+        "command": "vsoil.saveLayout",
+        "title": "vsoil: save layout"
+      },
+      {
+        "command": "vsoil.restoreLayout",
+        "title": "vsoil: restore layout"
       },
       {
         "command": "vsoil.openCurrentDirectory",
