@@ -14,8 +14,12 @@
   "contributes": {
     "commands": [
       {
-        "command": "vsoil.start",
-        "title": "vsoil: Open vsoil"
+        "command": "vsoil.openPanelWithPreview",
+        "title": "vsoil: Open vsoil panel with preview"
+      },
+      {
+        "command": "vsoil.openPanel",
+        "title": "vsoil: Open vsoil panel"
       },
       {
         "command": "vsoil.togglePreview",

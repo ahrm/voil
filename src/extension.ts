@@ -1,4 +1,3 @@
-// todo: when launched, we should save the current view state, when we select a file, we should restore the view state with the selected file opened only in the active window in the original view state
 // todo: syntax highlight 
 // todo: add an option to run a command line program on selected items
 // todo: make sure vsoil documents are closed after we are done
@@ -6,6 +5,7 @@
 import { rename } from 'fs';
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { getActiveResourcesInfo } from 'process';
 
 class DirectoryListingData {
     identifier: string;
@@ -119,8 +119,9 @@ type SavedEditorLayout = {
 
 export function activate(context: vscode.ExtensionContext) {
 
-    var currentDir = vscode.workspace.workspaceFolders?.[0].uri;
-    var vsoilDoc: vscode.TextDocument | undefined = undefined;
+    // var currentDir = vscode.workspace.workspaceFolders?.[0].uri;
+    var vsoilPanel: VsoilDoc | undefined = undefined;
+    var vsoilDocs: VsoilDoc[] = [];
     var previewDoc: vscode.TextDocument | undefined = undefined;
     var previewTextEditor: vscode.TextEditor | undefined = undefined;
 
@@ -185,22 +186,45 @@ export function activate(context: vscode.ExtensionContext) {
         restoreEditorLayout();
     });
 
-    const openCurrentDirectory = vscode.commands.registerCommand('vsoil.openCurrentDirectory', () => {
-        if (currentDir) {
+    const openCurrentDirectory = vscode.commands.registerCommand('vsoil.openCurrentDirectory', async () => {
+        let doc = await getVsoilDoc();
+        if (doc) {
             // open the operating system's file explorer in the current directory
-            vscode.env.openExternal(vscode.Uri.file(currentDir.path));
+            vscode.env.openExternal(vscode.Uri.file(doc.currentDir.path));
         }
     });
 
     context.subscriptions.push(togglePreview);
 
     let getVsoilDoc = async () => {
-        if (vsoilDoc) {
-            return vsoilDoc;
+        if (vsoilPanel) {
+            return vsoilPanel;
         }
         // vsoilDoc = await vscode.workspace.openTextDocument({ content: '' });
-        vsoilDoc = await vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:Vsoil.vsoil'));
-        return vsoilDoc;
+        let doc = await vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:Vsoil.vsoil'));
+        let res: VsoilDoc = {
+            doc: doc,
+            hasPreview: previewEnabled,
+            currentDir: vscode.workspace.workspaceFolders?.[0].uri!
+        };
+        vsoilPanel = res;
+        return res;
+    };
+
+    let newVsoilDoc = async () => {
+        let nonVisibleVsoilDocs = vsoilDocs.filter((doc) => !vscode.window.visibleTextEditors.some((editor) => editor.document === doc.doc));
+        if (nonVisibleVsoilDocs.length > 0){
+            return nonVisibleVsoilDocs[0];
+        }
+
+        let doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(`untitled:Vsoil-doc${vsoilDocs.length}.vsoil`));
+        let res: VsoilDoc = {
+            doc: doc,
+            hasPreview: false,
+            currentDir: vscode.workspace.workspaceFolders?.[0].uri!
+        };
+        vsoilDocs.push(res);
+        return res;
     };
 
     let getPreviewDoc = async () => {
@@ -291,11 +315,18 @@ export function activate(context: vscode.ExtensionContext) {
         return res;
     };
 
+    type VsoilDoc = {
+        doc: vscode.TextDocument;
+        hasPreview: boolean;
+        currentDir: vscode.Uri;
+    }
+
     const handleSave = vscode.commands.registerCommand('vsoil.handleSave', async () => {
-        let doc = await getVsoilDoc();
-        let originalContent = await getContentForPath(currentDir!);
+        let doc = await getVsoilDocForActiveEditor();
+        if (!doc) return;
+        let originalContent = await getContentForPath(doc.currentDir!);
         var originalIdentifiers: Map<string, DirectoryListingData[]> = getIdentifiersFromContent(originalContent);
-        let content = doc.getText();
+        let content = doc.doc.getText();
         var newIdentifiers: Map<string, DirectoryListingData[]> = getIdentifiersFromContent(content);
 
         var copiedIdentifiers: Map<string, DirectoryListingData[]> = new Map();
@@ -305,12 +336,12 @@ export function activate(context: vscode.ExtensionContext) {
         for (let [identifier, items] of newIdentifiers){
             let originalPath = getPathForIdentifier(identifier);
             let originalParentPath = originalPath?.split('/').slice(0, -1).join('/');
-            let isCurrentDirTheSameAsOriginal = currentDir?.path === originalParentPath;
+            let isCurrentDirTheSameAsOriginal = doc.currentDir?.path === originalParentPath;
             let newItems: DirectoryListingData[] = [];
             let originalExists = false;
 
             for (let item of items){
-                let itemPath = vscode.Uri.joinPath(currentDir!, item.name).path;
+                let itemPath = vscode.Uri.joinPath(doc.currentDir!, item.name).path;
                 if (originalPath && originalPath !== itemPath){
                     newItems.push(item);
                 }
@@ -351,7 +382,7 @@ export function activate(context: vscode.ExtensionContext) {
         for (let [identifier, items] of copiedIdentifiers){
             let originalPath = getPathForIdentifier(identifier);
             for (let item of items){
-                let newPath = vscode.Uri.joinPath(currentDir!, item.name).path;
+                let newPath = vscode.Uri.joinPath(doc.currentDir!, item.name).path;
                 if (originalPath){
                     await vscode.workspace.fs.copy(vscode.Uri.parse(originalPath), vscode.Uri.parse(newPath));
 
@@ -373,7 +404,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (deletedIdentifiers.size > 0 || renamedIdentifiers.size > 0 || movedIdentifiers.size > 0){
             let response = await showDeleteConfirmation(deletedIdentifiers, renamedIdentifiers, movedIdentifiers);
             // make sure the document has focus
-            await vscode.window.showTextDocument(doc);
+            await vscode.window.showTextDocument(doc.doc);
             if (response === 'Yes'){
                 for (let [identifier, [{ isDir, name, isNew }]] of deletedIdentifiers){
                     // delete the file/directory
@@ -394,7 +425,7 @@ export function activate(context: vscode.ExtensionContext) {
                 }
                 for (let [identifier, item] of renamedIdentifiers) {
                     let originalPath = getPathForIdentifier(identifier);
-                    let newPath = vscode.Uri.joinPath(currentDir!, item.newData.name).path;
+                    let newPath = vscode.Uri.joinPath(doc.currentDir!, item.newData.name).path;
                     // do the rename
                     if (originalPath && newPath) {
                         await vscode.workspace.fs.rename(vscode.Uri.parse(originalPath), vscode.Uri.parse(newPath));
@@ -408,7 +439,7 @@ export function activate(context: vscode.ExtensionContext) {
 
                 for (let [identifier, item] of movedIdentifiers) {
                     let originalPath = getPathForIdentifier(identifier);
-                    let newPath = vscode.Uri.joinPath(currentDir!, item.newData.name).path;
+                    let newPath = vscode.Uri.joinPath(doc.currentDir!, item.newData.name).path;
                     if (originalPath && newPath) {
                         await vscode.workspace.fs.rename(vscode.Uri.parse(originalPath), vscode.Uri.parse(newPath));
                         pathToIdentifierMap.delete(originalPath);
@@ -429,7 +460,7 @@ export function activate(context: vscode.ExtensionContext) {
 
             let { identifier, isDir, name, isNew } = parseLine(line);
             if (isNew) {
-                let fullPath = vscode.Uri.joinPath(currentDir!, name + "/");
+                let fullPath = vscode.Uri.joinPath(doc.currentDir!, name + "/");
 
                 if (isDir) {
                     let pathParts = fullPath.path.split('/');
@@ -454,39 +485,41 @@ export function activate(context: vscode.ExtensionContext) {
         if (modified){
             // pathToIdentifierMap.clear();
             // identifierToPathMap.clear();
-            await updateDocContentToCurrentDir();
+            await updateDocContentToCurrentDir(doc);
         }
 
         cutIdentifiers.clear();
     });
 
     const handleEnter = vscode.commands.registerCommand('vsoil.handleEnter', async () => {
+        let doc = await getVsoilDocForActiveEditor();
+        if (!doc) return;
         let currentCursorLineIndex = vscode.window.activeTextEditor?.selection.active.line;
-        let prevDirectory = currentDir?.path;
+        let prevDirectory = doc.currentDir?.path;
         if (currentCursorLineIndex !== undefined) {
-            let {identifier, isDir, name} = parseLine(vsoilDoc?.getText(vsoilDoc.lineAt(currentCursorLineIndex).range) ?? '');
+            let {identifier, isDir, name} = parseLine(doc.doc.getText(doc.doc.lineAt(currentCursorLineIndex).range) ?? '');
             let currentDirName = name;
             var focusLine = '';
 
             if (isDir){
                 if (currentDirName === '..') {
                     // focusline should be the last part of current path
-                    let pathParts = currentDir?.path.split('/');
+                    let pathParts = doc.currentDir?.path.split('/');
                     focusLine = pathParts?.[pathParts.length - 1] ?? '';
-                    currentDir = vscode.Uri.joinPath(currentDir!, '..');
+                    doc.currentDir = vscode.Uri.joinPath(doc.currentDir!, '..');
                 }
                 else {
-                    currentDir = vscode.Uri.joinPath(currentDir!, currentDirName!);
+                    doc.currentDir = vscode.Uri.joinPath(doc.currentDir!, currentDirName!);
                     if (vscode.window.activeTextEditor) {
                         vscode.window.activeTextEditor.selection = new vscode.Selection(0, 0, 0, 0);
                         vscode.window.activeTextEditor.revealRange(new vscode.Range(0, 0, 0, 0));
                     }
                 }
-                await updateDocContentToCurrentDir(prevDirectory);
+                await updateDocContentToCurrentDir(doc, prevDirectory);
                 if (focusLine){
-                    let lineIndex = vsoilDoc?.getText().split('\n').findIndex((line) => line.trimEnd().endsWith(`/ ${focusLine}`));
+                    let lineIndex = doc.doc?.getText().split('\n').findIndex((line) => line.trimEnd().endsWith(`/ ${focusLine}`));
                     if (lineIndex !== undefined && lineIndex !== -1){
-                        let line = vsoilDoc?.lineAt(lineIndex);
+                        let line = doc.doc?.lineAt(lineIndex);
                         if (line){
                             let selection = new vscode.Selection(line.range.start, line.range.start);
                             if (vscode.window.activeTextEditor) {
@@ -499,9 +532,9 @@ export function activate(context: vscode.ExtensionContext) {
             }
             else{
                 // open file
-                let fileUri = vscode.Uri.joinPath(currentDir!, currentDirName!);
-                let doc = await vscode.workspace.openTextDocument(fileUri);
-                await vscode.window.showTextDocument(doc);
+                let fileUri = vscode.Uri.joinPath(doc.currentDir!, currentDirName!);
+                let newdoc = await vscode.workspace.openTextDocument(fileUri);
+                await vscode.window.showTextDocument(newdoc);
                 await hidePreviewWindow();
             }
         }
@@ -548,15 +581,14 @@ export function activate(context: vscode.ExtensionContext) {
         return content;
     }
 
-    let updateDocContentToCurrentDir = async (prevDirectory: string | undefined = undefined) => {
+    let updateDocContentToCurrentDir = async (doc: VsoilDoc, prevDirectory: string | undefined = undefined) => {
 
-        let rootUri = currentDir;
+        let rootUri = doc.currentDir;
         let content = await getContentForPath(rootUri!);
-        let doc = await getVsoilDoc();
 
         if (prevDirectory){
             let prevContentOnDisk = await getContentForPath(vscode.Uri.parse(prevDirectory));
-            let prevContentOnFile = doc.getText();
+            let prevContentOnFile = doc.doc.getText();
 
             let diskIdentifiers = new Set<string>();
             let fileIdentifiers = new Set<string>();
@@ -580,52 +612,86 @@ export function activate(context: vscode.ExtensionContext) {
         // set doc content
         const edit = new vscode.WorkspaceEdit();
         const fullRange = new vscode.Range(
-            doc.positionAt(0),
-            doc.positionAt(doc.getText().length)
+            doc.doc.positionAt(0),
+            doc.doc.positionAt(doc.doc.getText().length)
         );
-        edit.replace(doc.uri, fullRange, content);
+        edit.replace(doc.doc.uri, fullRange, content);
         await vscode.workspace.applyEdit(edit);
     };
 
-    const startVsoilCommand = vscode.commands.registerCommand('vsoil.start', async () => {
+    vscode.window.onDidChangeActiveTextEditor(editor => {
+        vscode.commands.executeCommand('setContext', 'vsoilDoc', editor?.document.uri.fsPath.endsWith('.vsoil'));
+    });
 
-        saveCurrentEditorLayout();
+    const handleStartVsoil = async (doc: VsoilDoc) => {
+        doc.currentDir = vscode.workspace.workspaceFolders?.[0].uri!;
+        await updateDocContentToCurrentDir(doc);
 
-        let doc = await getVsoilDoc();
-        currentDir = vscode.workspace.workspaceFolders?.[0].uri;
-        await updateDocContentToCurrentDir();
-
-        await vscode.window.showTextDocument(doc);
+        await vscode.window.showTextDocument(doc.doc);
         // move cursor to the first line
-        let selection = new vscode.Selection(doc.positionAt(0), doc.positionAt(0));
+        let selection = new vscode.Selection(doc.doc.positionAt(0), doc.doc.positionAt(0));
 
         if (vscode.window.activeTextEditor){
             vscode.window.activeTextEditor.selection = selection;
         }
 
         vscode.commands.executeCommand('setContext', 'vsoilDoc', true);
-        vscode.window.onDidChangeActiveTextEditor(editor => {
-            vscode.commands.executeCommand('setContext', 'vsoilDoc', editor?.document ===  doc);
-        });
+    };
+
+    const openVsoilDoc = vscode.commands.registerCommand('vsoil.openPanel', async () => {
+        let doc = await newVsoilDoc();
+        await handleStartVsoil(doc);
+    });
+
+    const startVsoilCommand = vscode.commands.registerCommand('vsoil.openPanelWithPreview', async () => {
+
+        saveCurrentEditorLayout();
+        let doc = await getVsoilDoc();
+        await handleStartVsoil(doc);
 
     });
 
     context.subscriptions.push(startVsoilCommand);
+    context.subscriptions.push(openVsoilDoc);
+
+    const getVsoilDocForActiveEditor = async () => {
+        let activeEditor = vscode.window.activeTextEditor;
+        if (activeEditor) {
+            let doc = vsoilDocs.find((doc) => doc.doc === activeEditor?.document);
+            if (doc) {
+                return doc;
+            }
+        }
+        if (vsoilPanel){
+            if (vsoilPanel.doc === activeEditor?.document){
+                return vsoilPanel;
+            }
+        }
+        return undefined;
+    }
 
     context.subscriptions.push(
         vscode.window.onDidChangeTextEditorSelection(async (event) => {
-            if (previewEnabled && event.textEditor.document === vsoilDoc) {
+            if (!event.textEditor.document.uri.fsPath.endsWith('.vsoil')) {
+                return;
+            }
+
+            let doc = await getVsoilDocForActiveEditor();
+            if (doc == undefined) return;
+            if (doc.hasPreview === false) return;
+
+            if (previewEnabled && event.textEditor.document === doc.doc) {
                 let previewExtensions = config.get<string[]>('previewExtensions') ?? [];
                 let lineIndex = event.selections[0]?.active.line;
                 if (lineIndex !== undefined) {
-                    let lineText = vsoilDoc.getText(vsoilDoc.lineAt(lineIndex).range);
+                    let lineText = doc.doc.getText(doc.doc.lineAt(lineIndex).range);
                     let { isDir, name } = parseLine(lineText);
                     if (!isDir && name !== '..') {
                         let ext = path.extname(name);
                         if (previewExtensions.includes(ext)) {
-                            let fileUri = vscode.Uri.joinPath(currentDir!, name);
-                            let doc = await vscode.workspace.openTextDocument(fileUri);
-                            previewTextEditor = await vscode.window.showTextDocument(doc, {
+                            let fileUri = vscode.Uri.joinPath(doc.currentDir!, name);
+                            let newdoc = await vscode.workspace.openTextDocument(fileUri);
+                            previewTextEditor = await vscode.window.showTextDocument(newdoc, {
                                 viewColumn: vscode.ViewColumn.Beside,
                                 preview: true,
                                 preserveFocus: true
@@ -633,20 +699,20 @@ export function activate(context: vscode.ExtensionContext) {
                         }
                         else{
                             // show some general information, e.g. file size etc. in the preview window
-                            let fileUri = vscode.Uri.joinPath(currentDir!, name);
+                            let fileUri = vscode.Uri.joinPath(doc.currentDir!, name);
                             let stats = await vscode.workspace.fs.stat(fileUri);
                             let content = `Size:\t\t\t${getFileSizeHumanReadableName(stats.size)}\n`;
                             content += `Modified:\t\t${new Date(stats.mtime).toLocaleString()}\n`;
                             content += `Created:\t\t${new Date(stats.ctime).toLocaleString()}\n`;
-                            let doc = await getPreviewDoc();
+                            let newdoc = await getPreviewDoc();
                             const edit = new vscode.WorkspaceEdit();
                             const fullRange = new vscode.Range(
-                                doc.positionAt(0),
-                                doc.positionAt(doc.getText().length)
+                                newdoc.positionAt(0),
+                                newdoc.positionAt(newdoc.getText().length)
                             );
-                            edit.replace(doc.uri, fullRange, content);
+                            edit.replace(newdoc.uri, fullRange, content);
                             await vscode.workspace.applyEdit(edit);
-                            previewTextEditor = await vscode.window.showTextDocument(doc, {
+                            previewTextEditor = await vscode.window.showTextDocument(newdoc, {
                                 viewColumn: vscode.ViewColumn.Beside,
                                 preview: true,
                                 preserveFocus: true
@@ -655,17 +721,17 @@ export function activate(context: vscode.ExtensionContext) {
                     }
                     else{
                         // show the directory listing in previewDoc
-                        let dirPath = vscode.Uri.joinPath(currentDir!, name);
+                        let dirPath = vscode.Uri.joinPath(doc.currentDir!, name);
                         let content = await getContentForPath(dirPath);
-                        let doc = await getPreviewDoc();
+                        let newdoc = await getPreviewDoc();
                         const edit = new vscode.WorkspaceEdit();
                         const fullRange = new vscode.Range(
-                            doc.positionAt(0),
-                            doc.positionAt(doc.getText().length)
+                            newdoc.positionAt(0),
+                            newdoc.positionAt(newdoc.getText().length)
                         );
-                        edit.replace(doc.uri, fullRange, content);
+                        edit.replace(newdoc.uri, fullRange, content);
                         await vscode.workspace.applyEdit(edit);
-                        previewTextEditor = await vscode.window.showTextDocument(doc, {
+                        previewTextEditor = await vscode.window.showTextDocument(newdoc, {
                             viewColumn: vscode.ViewColumn.Beside,
                             preview: true,
                             preserveFocus: true
