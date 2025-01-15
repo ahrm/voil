@@ -187,7 +187,7 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     const openCurrentDirectory = vscode.commands.registerCommand('vsoil.openCurrentDirectory', async () => {
-        let doc = await getVsoilDoc();
+        let doc = await getVsoilDocForActiveEditor();
         if (doc) {
             // open the operating system's file explorer in the current directory
             vscode.env.openExternal(vscode.Uri.file(doc.currentDir.path));
