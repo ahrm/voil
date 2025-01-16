@@ -228,11 +228,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
         // vsoilDoc = await vscode.workspace.openTextDocument({ content: '' });
         let doc = await vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:Vsoil.vsoil'));
-        let res: VsoilDoc = {
-            doc: doc,
-            hasPreview: previewEnabled,
-            currentDir: vscode.workspace.workspaceFolders?.[0].uri!
-        };
+        let res = new VsoilDoc(doc, previewEnabled, vscode.workspace.workspaceFolders?.[0].uri!);
         vsoilPanel = res;
         return res;
     };
@@ -244,11 +240,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         let doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(`untitled:Vsoil-doc${vsoilDocs.length}.vsoil`));
-        let res: VsoilDoc = {
-            doc: doc,
-            hasPreview: false,
-            currentDir: vscode.workspace.workspaceFolders?.[0].uri!
-        };
+        let res = new VsoilDoc(doc, false, vscode.workspace.workspaceFolders?.[0].uri!);
         vsoilDocs.push(res);
         return res;
     };
@@ -353,10 +345,24 @@ export function activate(context: vscode.ExtensionContext) {
         return res;
     };
 
-    type VsoilDoc = {
+    class VsoilDoc{
         doc: vscode.TextDocument;
         hasPreview: boolean;
-        currentDir: vscode.Uri;
+        currentDirectory: vscode.Uri;
+
+        constructor(doc: vscode.TextDocument, hasPreview: boolean, currentDir: vscode.Uri){
+            this.doc = doc;
+            this.hasPreview = hasPreview;
+            this.currentDirectory = currentDir;
+        }
+
+        get currentDir(){
+            return this.currentDirectory;
+        }
+
+        set currentDir(uri: vscode.Uri){
+            this.currentDirectory = uri;
+        }
     }
 
     const handleSave = vscode.commands.registerCommand('vsoil.handleSave', async () => {
