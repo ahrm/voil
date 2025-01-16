@@ -61,6 +61,10 @@
         "title": "vsoil: restore layout"
       },
       {
+        "command": "vsoil.runShellCommandOnSelection",
+        "title": "vsoil: run shell command on selected items"
+      },
+      {
         "command": "vsoil.openCurrentDirectory",
         "title": "vsoil: Open the current directory in the default file explorer"
       }

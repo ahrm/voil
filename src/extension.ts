@@ -2,7 +2,7 @@
 // todo: add an option to run a command line program on selected items
 // c-o does not work well with preview document
 
-import { rename } from 'fs';
+import { copyFileSync, rename } from 'fs';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { getActiveResourcesInfo } from 'process';
@@ -202,7 +202,38 @@ export function activate(context: vscode.ExtensionContext) {
         }
     };
 
-    const debugCommand = vscode.commands.registerCommand('vsoil.debug', () => {
+    const runShellCommandOnSelectionCommand = vscode.commands.registerCommand('vsoil.runShellCommandOnSelection', async () => {
+        let shellCommand = await vscode.window.showInputBox({ prompt: 'Enter shell command to run on selected items' });
+        if (shellCommand){
+            let vsoil = await getVsoilDocForActiveEditor();
+            if (vsoil !== undefined) {
+                // let { name } = vsoil?.getFocusItem()!;
+                let items = vsoil?.getSelectedItems()!;
+                for (let { name } of items){
+                    var fullPath = vscode.Uri.joinPath(vsoil?.currentDir!, name).path;
+                    if (fullPath[0] == "/" && (process.platform === "win32")) {
+                        fullPath = fullPath.slice(1);
+                    }
+                    let cmd = shellCommand.replace('${file}', fullPath);
+
+                    console.log(`running shell command: ${cmd}`);
+                    runShellCommand(cmd);
+                }
+            }
+        }
+    });
+
+    const debugCommand = vscode.commands.registerCommand('vsoil.debug', async () => {
+        // let vsoil = await getVsoilDocForActiveEditor();
+        // if (vsoil !== undefined){
+        //     let { name } = vsoil?.getSelectedItem()!;
+        //     var fullPath = vscode.Uri.joinPath(vsoil?.currentDir!, name).path;
+        //     if (fullPath[0] == "/" && (process.platform === "win32")) {
+        //         fullPath = fullPath.slice(1);
+        //     }
+        //     let commandToOpenInNvim = `nvim-qt ${fullPath}`;
+        //     runShellCommand(commandToOpenInNvim);
+        // }
     });
 
     const saveLayoutCommand = vscode.commands.registerCommand('vsoil.saveLayout', () => {
@@ -374,6 +405,34 @@ export function activate(context: vscode.ExtensionContext) {
             this.watcher.onDidCreate(async (e) => {
                 await updateDocContentToCurrentDir(this);
             });
+        }
+
+        getTextEditor(){
+            return vscode.window.visibleTextEditors.find((editor) => editor.document === this.doc);
+        }
+
+        getFocusItem(){
+            let editor = this.getTextEditor();
+            let currentCursorLineIndex = editor?.selection.active.line;
+            if (currentCursorLineIndex !== undefined) {
+                return parseLine(this.doc.getText(this.doc.lineAt(currentCursorLineIndex).range));
+            }
+            return undefined;
+        }
+
+        getSelectedItems(){
+            let editor = this.getTextEditor();
+            let selectedItems: DirectoryListingData[] = [];
+            if (editor){
+                for (let selection of editor.selections){
+                    for (let i = selection.start.line; i <= selection.end.line; i++){
+                        let line = this.doc.getText(this.doc.lineAt(i).range);
+                        let item = parseLine(line);
+                        selectedItems.push(item);
+                    }
+                }
+            }
+            return selectedItems;
         }
 
         handleClose(){
@@ -580,7 +639,9 @@ export function activate(context: vscode.ExtensionContext) {
     const handleEnter = vscode.commands.registerCommand('vsoil.handleEnter', async () => {
         let doc = await getVsoilDocForActiveEditor();
         if (!doc) return;
-        let currentCursorLineIndex = vscode.window.activeTextEditor?.selection.active.line;
+        // let activeEditor = doc.getTextEditor();
+        // let currentCursorLineIndex = vscode.window.activeTextEditor?.selection.active.line;
+        let currentCursorLineIndex = doc.getTextEditor()?.selection.active.line;
         let prevDirectory = doc.currentDir?.path;
         if (currentCursorLineIndex !== undefined) {
             let {identifier, isDir, name} = parseLine(doc.doc.getText(doc.doc.lineAt(currentCursorLineIndex).range) ?? '');
@@ -753,6 +814,18 @@ export function activate(context: vscode.ExtensionContext) {
         await handleStartVsoil(doc, vscode.workspace.workspaceFolders?.[0].uri!);
 
     });
+
+    const runShellCommand = (cmd: string) => {
+        const exec = require('child_process').exec;
+        exec(cmd, (error: any, stdout: any, stderr: any) => {
+            if (error) {
+                console.error(`exec error: ${error}`);
+                return;
+            }
+            console.log(`stdout: ${stdout}`);
+            console.error(`stderr: ${stderr}`);
+        });
+    };
 
     const openVsoilDocCurrentDir = vscode.commands.registerCommand('vsoil.openPanelCurrentDir', async () => {
         let doc = await newVsoilDoc();
