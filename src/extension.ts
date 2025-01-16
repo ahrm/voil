@@ -46,7 +46,7 @@ async function showDeleteConfirmation(
     const panel = vscode.window.createWebviewPanel(
         'deleteConfirmation',
         'Delete Confirmation',
-        vscode.ViewColumn.One,
+        vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.One,
         { enableScripts: true }
     );
 
@@ -524,6 +524,13 @@ export function activate(context: vscode.ExtensionContext) {
                     }
                 }
             }
+            else{
+                // if the user chose "No", then we update the contents of the documents because the user might have made some changes 
+                // for example, if the user has deleted some files from a view and then chose "No", we should restore the view to its original state
+                for (let doc of vsoilDocs){
+                    await updateDocContentToCurrentDir(doc);
+                }
+            }
         }
 
         let lines = content.split('\n');
@@ -769,8 +776,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(startVsoilCommand);
     context.subscriptions.push(openVsoilDoc);
 
-    const getVsoilDocForActiveEditor = async () => {
-        let activeEditor = vscode.window.activeTextEditor;
+    const getVsoilDocForEditor = (activeEditor: vscode.TextEditor | undefined) => {
         if (activeEditor) {
             let doc = vsoilDocs.find((doc) => doc.doc === activeEditor?.document);
             if (doc) {
@@ -783,7 +789,44 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }
         return undefined;
+    };
+
+    const getVsoilDocForActiveEditor = async () => {
+        let activeEditor = vscode.window.activeTextEditor;
+        return getVsoilDocForEditor(activeEditor);
+        // if (activeEditor) {
+        //     let doc = vsoilDocs.find((doc) => doc.doc === activeEditor?.document);
+        //     if (doc) {
+        //         return doc;
+        //     }
+        // }
+        // if (vsoilPanel){
+        //     if (vsoilPanel.doc === activeEditor?.document){
+        //         return vsoilPanel;
+        //     }
+        // }
+        // return undefined;
     }
+
+    let lastFocusedEditor: vscode.TextEditor | undefined = undefined;
+
+    // handle when focused documents changes 
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor(async (editor) => {
+            let prevEditor = lastFocusedEditor;
+            lastFocusedEditor = editor;
+            // if the previous editor is a vsoil editor
+            if (prevEditor && prevEditor.document.uri.fsPath.endsWith('.vsoil')) {
+                let doc = await getVsoilDocForEditor(prevEditor);
+                if (doc) {
+                    let prevDirectory = doc.currentDir?.path;
+                    let prevListingContent = await getContentForPath(vscode.Uri.parse(prevDirectory!));
+                    updateCutIdentifiers(doc, prevListingContent);
+                    // await updateDocContentToCurrentDir(doc, prevDirectory);
+                }
+            }
+        })
+    );
 
     context.subscriptions.push(
         vscode.window.onDidChangeTextEditorSelection(async (event) => {
