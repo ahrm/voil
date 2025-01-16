@@ -757,8 +757,15 @@ export function activate(context: vscode.ExtensionContext) {
     const openVsoilDocCurrentDir = vscode.commands.registerCommand('vsoil.openPanelCurrentDir', async () => {
         let doc = await newVsoilDoc();
         let currentDocumentPath = vscode.window.activeTextEditor?.document.uri;
-        let currentDocumentName = path.basename(currentDocumentPath!.path);
-        let parentUri = vscode.Uri.joinPath(currentDocumentPath!, '..');
+        let parentUri = vscode.workspace.workspaceFolders?.[0].uri!;
+        let currentDocumentName = undefined;
+        if (currentDocumentPath){
+            if (!currentDocumentPath.toString().endsWith(".vsoil")){
+                currentDocumentName = path.basename(currentDocumentPath.path);
+                parentUri = vscode.Uri.joinPath(currentDocumentPath!, '..');
+            }
+        }
+
         await handleStartVsoil(doc, parentUri, currentDocumentName);
     });
 
@@ -766,8 +773,12 @@ export function activate(context: vscode.ExtensionContext) {
 
         await saveCurrentEditorLayout();
         let currentDocumentPath = vscode.window.activeTextEditor?.document.uri;
-        let parentUri = vscode.Uri.joinPath(currentDocumentPath!, '..');
-        let currentDocumentName = path.basename(currentDocumentPath!.path);
+        let parentUri = vscode.workspace.workspaceFolders?.[0].uri!;
+        let currentDocumentName = undefined;
+        if (currentDocumentPath){
+            currentDocumentName = path.basename(currentDocumentPath.path);
+            parentUri = vscode.Uri.joinPath(currentDocumentPath!, '..');
+        }
         let doc = await getVsoilDoc();
         await handleStartVsoil(doc, parentUri, currentDocumentName);
 
@@ -840,7 +851,6 @@ export function activate(context: vscode.ExtensionContext) {
             if (doc.hasPreview === false) return;
 
             // when selection changes, update the preview window
-
             if (previewEnabled && event.textEditor.document === doc.doc) {
                 let previewExtensions = config.get<string[]>('previewExtensions') ?? [];
                 let lineIndex = event.selections[0]?.active.line;
