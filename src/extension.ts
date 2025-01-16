@@ -439,6 +439,8 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }
 
+        let newNames : string[] = [];
+
         if (deletedIdentifiers.size > 0 || renamedIdentifiers.size > 0 || movedIdentifiers.size > 0){
             let response = await showDeleteConfirmation(deletedIdentifiers, renamedIdentifiers, movedIdentifiers);
             // make sure the document has focus
@@ -472,6 +474,7 @@ export function activate(context: vscode.ExtensionContext) {
                         pathToIdentifierMap.set(newPath, identifier);
                         identifierToPathMap.delete(identifier);
                         identifierToPathMap.set(identifier, newPath);
+                        newNames.push(item.newData.name);
                     }
                 }
 
@@ -484,6 +487,7 @@ export function activate(context: vscode.ExtensionContext) {
                         pathToIdentifierMap.set(newPath, identifier);
                         identifierToPathMap.delete(identifier);
                         identifierToPathMap.set(identifier, newPath);
+                        newNames.push(item.newData.name);
                     }
                 }
             }
@@ -491,7 +495,6 @@ export function activate(context: vscode.ExtensionContext) {
 
         let lines = content.split('\n');
         var modified = deletedIdentifiers.size > 0 || copiedIdentifiers.size > 0 || renamedIdentifiers.size > 0 || movedIdentifiers.size > 0;
-        let newNames : string[] = [];
         for (let line of lines){
             if (line.trim().length === 0) {
                 continue;
