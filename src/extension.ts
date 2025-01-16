@@ -179,7 +179,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (vsoilPanel){
             let isVisible = vscode.window.visibleTextEditors.some((editor) => editor.document === vsoilPanel?.doc);
             if (!isVisible){
-                docsToClose.push(vsoilPanel.doc);
+                docsToClose.push(vsoilPanel);
                 vsoilPanel = undefined;
             }
         }
@@ -190,12 +190,13 @@ export function activate(context: vscode.ExtensionContext) {
                 docsToKeep.push(doc);
             }
             else{
-                docsToClose.push(doc.doc);
+                docsToClose.push(doc);
             }
         }
         vsoilDocs = docsToKeep;
         for (let doc of docsToClose){
-            await vscode.window.showTextDocument(doc).then(async () => {
+            doc.handleClose();
+            await vscode.window.showTextDocument(doc.doc).then(async () => {
                 await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
             });
         }
@@ -350,10 +351,35 @@ export function activate(context: vscode.ExtensionContext) {
         hasPreview: boolean;
         currentDirectory: vscode.Uri;
 
+        watcher: vscode.FileSystemWatcher | undefined;
+
         constructor(doc: vscode.TextDocument, hasPreview: boolean, currentDir: vscode.Uri){
             this.doc = doc;
             this.hasPreview = hasPreview;
             this.currentDirectory = currentDir;
+            this.updateWatcher();
+        }
+
+        updateWatcher(){
+            if (this.watcher){
+                this.watcher.dispose();
+            }
+            this.watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(this.currentDirectory.fsPath, '*'));
+            this.watcher.onDidChange(async (e) => {
+                await updateDocContentToCurrentDir(this);
+            });
+            this.watcher.onDidDelete(async (e) => {
+                await updateDocContentToCurrentDir(this);
+            });
+            this.watcher.onDidCreate(async (e) => {
+                await updateDocContentToCurrentDir(this);
+            });
+        }
+
+        handleClose(){
+            if (this.watcher){
+                this.watcher.dispose();
+            }
         }
 
         get currentDir(){
@@ -362,6 +388,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         set currentDir(uri: vscode.Uri){
             this.currentDirectory = uri;
+            this.updateWatcher();
         }
     }
 
