@@ -78,13 +78,13 @@
             {
               "scope": "vsoil.filetype.txt",
               "settings": {
-                "foreground": "#96fe96"
+                "foreground": "#cccccc"
               }
             },
             {
               "scope": "vsoil.dirtype.dir",
               "settings": {
-                "foreground": "#a6a6ff"
+                "foreground": "#3794ff"
               }
             },
             {
@@ -96,7 +96,7 @@
             {
               "scope": "vsoil.filetype.generic",
               "settings": {
-                "foreground": "#fbb5b5"
+                "foreground": "#f48771"
               }
             }
           ]
