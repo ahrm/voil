@@ -624,6 +624,33 @@ export function activate(context: vscode.ExtensionContext) {
         return content;
     }
 
+    const getCutIdentifiersFromFileContents = (prevContentOnDisk: string, prevContentOnFile: string) => {
+        let diskIdentifiers = new Set<string>();
+        let fileIdentifiers = new Set<string>();
+
+        for (let line of prevContentOnDisk.split('\n')) {
+            let { identifier } = parseLine(line);
+            diskIdentifiers.add(identifier);
+        }
+
+        for (let line of prevContentOnFile.split('\n')) {
+            let { identifier } = parseLine(line);
+            fileIdentifiers.add(identifier);
+        }
+
+        let cutIds = new Set([...diskIdentifiers].filter(x => !fileIdentifiers.has(x)));
+        return cutIds;
+    };
+
+    const updateCutIdentifiers = async (doc: VsoilDoc, prevContentOnDisk: string) => {
+        let prevContentOnFile = doc.doc.getText();
+
+        let cutIds = getCutIdentifiersFromFileContents(prevContentOnDisk, prevContentOnFile);
+        if (cutIds.size) {
+            cutIdentifiers = cutIds;
+        }
+    };
+
     let updateDocContentToCurrentDir = async (doc: VsoilDoc, prevDirectory: string | undefined = undefined) => {
 
         let rootUri = doc.currentDir;
@@ -631,25 +658,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         if (prevDirectory){
             let prevContentOnDisk = await getContentForPath(vscode.Uri.parse(prevDirectory));
-            let prevContentOnFile = doc.doc.getText();
-
-            let diskIdentifiers = new Set<string>();
-            let fileIdentifiers = new Set<string>();
-
-            for (let line of prevContentOnDisk.split('\n')){
-                let { identifier } = parseLine(line);
-                diskIdentifiers.add(identifier);
-            }
-
-            for (let line of prevContentOnFile.split('\n')){
-                let { identifier } = parseLine(line);
-                fileIdentifiers.add(identifier);
-            }
-
-            let cutIds = new Set([...diskIdentifiers].filter(x => !fileIdentifiers.has(x)));
-            if (cutIds.size){
-                cutIdentifiers = cutIds;
-            }
+            updateCutIdentifiers(doc, prevContentOnDisk);
         }
 
         // set doc content
