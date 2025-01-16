@@ -810,19 +810,20 @@ export function activate(context: vscode.ExtensionContext) {
 
     let lastFocusedEditor: vscode.TextEditor | undefined = undefined;
 
-    // handle when focused documents changes 
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor(async (editor) => {
+            // when active editor changes, update the cut identifiers
+            // this is to enable cutting between different vsoil panels
+            // for example, in a two panel layout, if you cut a file in one panel and paste it in another panel
+            // we need to have updated cut identifiers in the old panel when we switch to the new panel
             let prevEditor = lastFocusedEditor;
             lastFocusedEditor = editor;
-            // if the previous editor is a vsoil editor
             if (prevEditor && prevEditor.document.uri.fsPath.endsWith('.vsoil')) {
                 let doc = await getVsoilDocForEditor(prevEditor);
                 if (doc) {
                     let prevDirectory = doc.currentDir?.path;
                     let prevListingContent = await getContentForPath(vscode.Uri.parse(prevDirectory!));
                     updateCutIdentifiers(doc, prevListingContent);
-                    // await updateDocContentToCurrentDir(doc, prevDirectory);
                 }
             }
         })
@@ -837,6 +838,8 @@ export function activate(context: vscode.ExtensionContext) {
             let doc = await getVsoilDocForActiveEditor();
             if (doc == undefined) return;
             if (doc.hasPreview === false) return;
+
+            // when selection changes, update the preview window
 
             if (previewEnabled && event.textEditor.document === doc.doc) {
                 let previewExtensions = config.get<string[]>('previewExtensions') ?? [];
