@@ -1,5 +1,6 @@
 // todo: syntax highlight 
 // todo: add an option to run a command line program on selected items
+// c-o does not work well with preview document
 
 import { rename } from 'fs';
 import * as vscode from 'vscode';
@@ -122,7 +123,6 @@ export function activate(context: vscode.ExtensionContext) {
     var vsoilPanel: VsoilDoc | undefined = undefined;
     var vsoilDocs: VsoilDoc[] = [];
     var previewDoc: vscode.TextDocument | undefined = undefined;
-    var previewTextEditor: vscode.TextEditor | undefined = undefined;
 
     var pathToIdentifierMap: Map<string, string> = new Map();
     var identifierToPathMap: Map<string, string> = new Map();
@@ -744,7 +744,7 @@ export function activate(context: vscode.ExtensionContext) {
                         if (previewExtensions.includes(ext)) {
                             let fileUri = vscode.Uri.joinPath(doc.currentDir!, name);
                             let newdoc = await vscode.workspace.openTextDocument(fileUri);
-                            previewTextEditor = await vscode.window.showTextDocument(newdoc, {
+                            await vscode.window.showTextDocument(newdoc, {
                                 viewColumn: vscode.ViewColumn.Beside,
                                 preview: true,
                                 preserveFocus: true
@@ -765,7 +765,7 @@ export function activate(context: vscode.ExtensionContext) {
                             );
                             edit.replace(newdoc.uri, fullRange, content);
                             await vscode.workspace.applyEdit(edit);
-                            previewTextEditor = await vscode.window.showTextDocument(newdoc, {
+                            await vscode.window.showTextDocument(newdoc, {
                                 viewColumn: vscode.ViewColumn.Beside,
                                 preview: true,
                                 preserveFocus: true
@@ -784,7 +784,7 @@ export function activate(context: vscode.ExtensionContext) {
                         );
                         edit.replace(newdoc.uri, fullRange, content);
                         await vscode.workspace.applyEdit(edit);
-                        previewTextEditor = await vscode.window.showTextDocument(newdoc, {
+                        await vscode.window.showTextDocument(newdoc, {
                             viewColumn: vscode.ViewColumn.Beside,
                             preview: true,
                             preserveFocus: true
