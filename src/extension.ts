@@ -327,6 +327,18 @@ export function activate(context: vscode.ExtensionContext) {
     };
 
 
+    const focusOnFileWithName = async (vsoil: VsoilDoc, name: string) => {
+        let lineIndex = vsoil.doc.getText().split('\n').findIndex((line) => line.trimEnd().endsWith(name));
+        if (lineIndex !== -1) {
+            let line = vsoil.doc.lineAt(lineIndex);
+            let selection = new vscode.Selection(line.range.start, line.range.start);
+            if (vscode.window.activeTextEditor) {
+                vscode.window.activeTextEditor.selection = selection;
+                vscode.window.activeTextEditor.revealRange(new vscode.Range(selection.start, selection.end));
+            }
+        }
+    };
+
     const getIdentifiersFromContent = (content: string) => {
         let res: Map<string, DirectoryListingData[]> = new Map();
         for (let line of content.split('\n')){
@@ -479,6 +491,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         let lines = content.split('\n');
         var modified = deletedIdentifiers.size > 0 || copiedIdentifiers.size > 0 || renamedIdentifiers.size > 0 || movedIdentifiers.size > 0;
+        let newNames : string[] = [];
         for (let line of lines){
             if (line.trim().length === 0) {
                 continue;
@@ -495,23 +508,27 @@ export function activate(context: vscode.ExtensionContext) {
                         let lastPartParentDir = pathParts.slice(0, pathParts.length - 1).join('/');
                         await vscode.workspace.fs.createDirectory(vscode.Uri.parse(lastPartParentDir));
                         await vscode.workspace.fs.writeFile(fullPath, new Uint8Array());
+                        newNames.push(name);
                     }
                     else{
                         await vscode.workspace.fs.createDirectory(fullPath);
+                        newNames.push(name);
                     }
                     modified = true;
                 }
                 else {
                     await vscode.workspace.fs.writeFile(fullPath, new Uint8Array());
+                    newNames.push(name);
                     modified = true;
                 }
             }
         }
 
         if (modified){
-            // pathToIdentifierMap.clear();
-            // identifierToPathMap.clear();
             await updateDocContentToCurrentDir(doc);
+            if (newNames.length > 0){
+                focusOnFileWithName(doc, newNames[0]);
+            }
         }
 
         cutIdentifiers.clear();
