@@ -117,6 +117,20 @@ type SavedEditorLayout = {
     visibleDocuments: vscode.TextDocument[];
 };
 
+class CustomShellCommand{
+    name: string;
+    id: string;
+    cmd: string;
+
+    isBulk: boolean = false;
+
+    constructor(name: string, id: string, cmd: string){
+        this.name = name;
+        this.id = id;
+        this.cmd = cmd;
+    }
+};
+
 export function activate(context: vscode.ExtensionContext) {
 
     // var currentDir = vscode.workspace.workspaceFolders?.[0].uri;
@@ -129,8 +143,10 @@ export function activate(context: vscode.ExtensionContext) {
     var cutIdentifiers = new Set<string>();
 
     let config = vscode.workspace.getConfiguration('vsoil');
+
     // let previewEnabled = false;
     let previewEnabled = config.get<boolean>('previewAutoOpen') ?? false;
+    let customShellCommands = config.get<CustomShellCommand[]>('customShellCommands');
 
     const togglePreview = vscode.commands.registerCommand('vsoil.togglePreview', () => {
         previewEnabled = !previewEnabled;
@@ -207,23 +223,33 @@ export function activate(context: vscode.ExtensionContext) {
         if (shellCommand){
             let vsoil = await getVsoilDocForActiveEditor();
             if (vsoil !== undefined) {
-                // let { name } = vsoil?.getFocusItem()!;
-                let items = vsoil?.getSelectedItems()!;
-                for (let { name } of items){
-                    var fullPath = vscode.Uri.joinPath(vsoil?.currentDir!, name).path;
-                    if (fullPath[0] == "/" && (process.platform === "win32")) {
-                        fullPath = fullPath.slice(1);
-                    }
-                    let cmd = shellCommand.replace('${file}', fullPath);
-
-                    console.log(`running shell command: ${cmd}`);
-                    runShellCommand(cmd);
-                }
+                vsoil.runShellCommandOnSelectedItems(shellCommand)
             }
         }
     });
 
+    const runShellCommandWithIdOnSelectionCommand = vscode.commands.registerCommand('vsoil.runShellCommandWithIdOnSelection', async (args) => {
+        let cmdId = args.id;
+        let cmd = customShellCommands?.find((cmd) => cmd.id === cmdId);
+        let vsoil = await getVsoilDocForActiveEditor();
+        if (cmd && vsoil){
+            vsoil.runShellCommandOnSelectedItems(cmd.cmd);
+        }
+    });
+
     const debugCommand = vscode.commands.registerCommand('vsoil.debug', async () => {
+        // show a list of custom shell commands to the user and return the selected one 
+        if (customShellCommands){
+            let selectedShellCommandName = await vscode.window.showQuickPick(customShellCommands?.map((cmd) => cmd.name));
+            let selectedShellCommand = customShellCommands.find((cmd) => cmd.name === selectedShellCommandName);
+            let vsoil = await getVsoilDocForActiveEditor();
+            if (vsoil && selectedShellCommand){
+                vsoil.runShellCommandOnSelectedItems(selectedShellCommand.cmd);
+            }
+
+        }
+        
+
         // let vsoil = await getVsoilDocForActiveEditor();
         // if (vsoil !== undefined){
         //     let { name } = vsoil?.getSelectedItem()!;
@@ -420,6 +446,7 @@ export function activate(context: vscode.ExtensionContext) {
             return undefined;
         }
 
+
         getSelectedItems(){
             let editor = this.getTextEditor();
             let selectedItems: DirectoryListingData[] = [];
@@ -433,6 +460,20 @@ export function activate(context: vscode.ExtensionContext) {
                 }
             }
             return selectedItems;
+        }
+
+        runShellCommandOnSelectedItems(cmd: string){
+            let items = this.getSelectedItems();
+            let rootDir: string = this.currentDir.path;
+            for (let { name } of items){
+                var fullPath = vscode.Uri.joinPath(this.currentDir!, name).path;
+                if (fullPath[0] == "/" && (process.platform === "win32")) {
+                    fullPath = fullPath.slice(1);
+                    rootDir = rootDir.slice(1);
+                }
+                let commandToRun = cmd.replace('${file}', fullPath);
+                runShellCommand(commandToRun, rootDir);
+            }
         }
 
         handleClose(){
@@ -815,9 +856,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     });
 
-    const runShellCommand = (cmd: string) => {
+    const runShellCommand = (cmd: string, rootDir: string) => {
         const exec = require('child_process').exec;
-        exec(cmd, (error: any, stdout: any, stderr: any) => {
+        exec(cmd, {cwd: rootDir}, (error: any, stdout: any, stderr: any) => {
             if (error) {
                 console.error(`exec error: ${error}`);
                 return;

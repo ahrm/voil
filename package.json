@@ -65,6 +65,16 @@
         "title": "vsoil: run shell command on selected items"
       },
       {
+        "command": "vsoil.runShellCommandWithIdOnSelection",
+        "title": "vsoil: run shell command with the given id on selected items",
+        "arguments": [
+          {
+            "name": "id",
+            "type": "string"
+          }
+        ]
+      },
+      {
         "command": "vsoil.openCurrentDirectory",
         "title": "vsoil: Open the current directory in the default file explorer"
       }
@@ -120,6 +130,11 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically open the preview window when the vsoil window is opened."
+        },
+        "vsoil.customShellCommands": {
+          "type": "array",
+          "default": [],
+          "description": "Custom shell commands that can be run on selected items."
         }
       }
     }
