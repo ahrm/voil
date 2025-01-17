@@ -581,7 +581,7 @@ export function activate(context: vscode.ExtensionContext) {
             await updateDocContentToCurrentDir(this)
         }
 
-        async setFilterPattern(pattern: string) {
+        setFilterPattern(pattern: string) {
             this.filterString = pattern;
         }
 
@@ -979,8 +979,30 @@ export function activate(context: vscode.ExtensionContext) {
                     else{
                         let cmd = name[0];
                         let cmdArg = name.slice(2).trim();
-                        if (cmd === 's'){
-                            await doc.setFilterPattern(cmdArg);
+                        if (cmd === 'f'){
+                            doc.setFilterPattern(cmdArg);
+                        }
+                        if (cmd === 's' || cmd === 'S'){
+
+                            if (cmd === 'S'){
+                                doc.isAscending = false;
+                            }
+                            else{
+                                doc.isAscending = true;
+                            }
+
+                            if (cmdArg === ''){
+                                doc.sortBy = SortBy.Name;
+                            }
+                            if (cmdArg === 'd'){
+                                doc.sortBy = SortBy.CreationDate;
+                            }
+                            if (cmdArg === 't'){
+                                doc.sortBy = SortBy.FileType;
+                            }
+                            if (cmdArg === 's'){
+                                doc.sortBy = SortBy.Size;
+                            }
                         }
                         if (cmd === 'o'){
                             vscode.env.openExternal(vscode.Uri.file(doc.currentDir.path));
