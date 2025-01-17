@@ -123,8 +123,6 @@ class CustomShellCommand{
     id: string;
     cmd: string;
 
-    isBulk: boolean = false;
-
     constructor(name: string, id: string, cmd: string){
         this.name = name;
         this.id = id;
@@ -437,7 +435,6 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         updateWatcher(){
-            let timeout: NodeJS.Timeout = setTimeout(() => {}, 0);
             if (this.watcher){
                 this.watcher.dispose();
             }
@@ -483,16 +480,40 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         runShellCommandOnSelectedItems(cmd: string){
+            // if the command contains ${file}, we run it for each selected file
+            // if the command contains ${files}, we run it for all selected files at once
+
+            let isBatch = cmd.includes('${files}') || cmd.includes('${filenames}');
             let items = this.getSelectedItems();
             let rootDir: string = this.currentDir.path;
-            for (let { name } of items){
-                var fullPath = vscode.Uri.joinPath(this.currentDir!, name).path;
-                if (fullPath[0] == "/" && (process.platform === "win32")) {
-                    fullPath = fullPath.slice(1);
-                    rootDir = rootDir.slice(1);
+
+            if (process.platform === "win32") {
+                rootDir = rootDir.slice(1);
+            }
+
+            const mapFilenameToPath = (filename: string) => {
+                let res = vscode.Uri.joinPath(this.currentDir!, filename).path;
+                if (res[0] == "/" && (process.platform === "win32")) {
+                    res = res.slice(1);
                 }
-                let commandToRun = cmd.replace('${file}', fullPath);
-                runShellCommand(commandToRun, rootDir);
+                return res;
+            };
+
+            if (isBatch){
+                let filesString = items.map(({ name }) => mapFilenameToPath(name)).join(' ');
+                let fileNamesString = items.map(({ name }) => name).join(' ');
+
+                let batchCmd = cmd.replace('${files}', filesString);
+                batchCmd = batchCmd.replace('${filenames}', fileNamesString);
+                runShellCommand(batchCmd, rootDir);
+            }
+            else{
+                for (let { name } of items) {
+                    var fullPath = mapFilenameToPath(name);
+                    let commandToRun = cmd.replace('${file}', fullPath);
+                    commandToRun = commandToRun.replace('${filename}', name);
+                    runShellCommand(commandToRun, rootDir);
+                }
             }
         }
 
