@@ -128,6 +128,28 @@ class CustomShellCommand{
         this.id = id;
         this.cmd = cmd;
     }
+
+    async getInputs(){
+        // match ${inp:input_name}
+        let cmdWithInupts = this.cmd;
+        let inputRegex = /\${inp:([^}]+)}/g;
+        let inputNames = [];
+        let match;
+        while ((match = inputRegex.exec(this.cmd)) !== null) {
+            inputNames.push(match[1]);
+        }
+
+        for (let inputName of inputNames){
+            let input = await vscode.window.showInputBox({ prompt: `Enter value for ${inputName}` });
+            if (input){
+                cmdWithInupts = cmdWithInupts.replace(`\${inp:${inputName}}`, input);
+            }
+            else{
+                return undefined;
+            }
+        }
+        return cmdWithInupts;
+    }
 };
 
 export function activate(context: vscode.ExtensionContext) {
@@ -145,7 +167,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     // let previewEnabled = false;
     let previewEnabled = config.get<boolean>('previewAutoOpen') ?? false;
-    let customShellCommands = config.get<CustomShellCommand[]>('customShellCommands');
+    let customShellCommands_ = config.get<CustomShellCommand[]>('customShellCommands');
+    let customShellCommands = customShellCommands_?.map((cmd) => new CustomShellCommand(cmd.name, cmd.id, cmd.cmd));
+
 
     const togglePreview = vscode.commands.registerCommand('vsoil.togglePreview', () => {
         previewEnabled = !previewEnabled;
@@ -232,21 +256,25 @@ export function activate(context: vscode.ExtensionContext) {
         let cmd = customShellCommands?.find((cmd) => cmd.id === cmdId);
         let vsoil = await getVsoilDocForActiveEditor();
         if (cmd && vsoil){
-            vsoil.runShellCommandOnSelectedItems(cmd.cmd);
+            let cmdWithInputs = await cmd.getInputs();
+            if (cmdWithInputs){
+                vsoil.runShellCommandOnSelectedItems(cmdWithInputs);
+            }
         }
     });
 
     const debugCommand = vscode.commands.registerCommand('vsoil.debug', async () => {
         // show a list of custom shell commands to the user and return the selected one 
-        if (customShellCommands){
-            let selectedShellCommandName = await vscode.window.showQuickPick(customShellCommands?.map((cmd) => cmd.name));
-            let selectedShellCommand = customShellCommands.find((cmd) => cmd.name === selectedShellCommandName);
-            let vsoil = await getVsoilDocForActiveEditor();
-            if (vsoil && selectedShellCommand){
-                vsoil.runShellCommandOnSelectedItems(selectedShellCommand.cmd);
-            }
+        // if (customShellCommands){
+        //     let selectedShellCommandName = await vscode.window.showQuickPick(customShellCommands?.map((cmd) => cmd.name));
+        //     let selectedShellCommand = customShellCommands.find((cmd) => cmd.name === selectedShellCommandName);
+        //     let vsoil = await getVsoilDocForActiveEditor();
+        //     if (vsoil && selectedShellCommand){
+        //         let cmdWithInputs = await selectedShellCommand.getInputs();
+        //         vsoil.runShellCommandOnSelectedItems(cmdWithInputs);
+        //     }
 
-        }
+        // }
         
 
         // let vsoil = await getVsoilDocForActiveEditor();
@@ -746,6 +774,7 @@ export function activate(context: vscode.ExtensionContext) {
                 }
                 await updateDocContentToCurrentDir(doc, prevDirectory);
                 if (focusLine){
+                    let docText = doc.doc?.getText();
                     let lineIndex = doc.doc?.getText().split('\n').findIndex((line) => line.trimEnd().endsWith(`/ ${focusLine}`));
                     if (lineIndex !== undefined && lineIndex !== -1){
                         let line = doc.doc?.lineAt(lineIndex);
@@ -853,7 +882,7 @@ export function activate(context: vscode.ExtensionContext) {
         // however, that does not work very well when there are multiple simulataneous updates (e.g. when a lot of files are being copied)
         // so we have the first option as well
         if (docTextEditor){
-            docTextEditor.edit((editBuilder) => {
+            await docTextEditor.edit((editBuilder) => {
                 editBuilder.replace(new vscode.Range(
                     docTextEditor.document.positionAt(0),
                     docTextEditor.document.positionAt(docTextEditor.document.getText().length)
