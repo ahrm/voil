@@ -6,6 +6,7 @@ import { copyFileSync, rename } from 'fs';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { getActiveResourcesInfo } from 'process';
+import { time } from 'console';
 
 class DirectoryListingData {
     identifier: string;
@@ -403,12 +404,13 @@ export function activate(context: vscode.ExtensionContext) {
         return res;
     };
 
-    class VsoilDoc{
+    class VsoilDoc {
         doc: vscode.TextDocument;
         hasPreview: boolean;
         currentDirectory: vscode.Uri;
 
         watcher: vscode.FileSystemWatcher | undefined;
+        watcherHandleEventTimeout: NodeJS.Timeout | undefined = undefined;
 
         constructor(doc: vscode.TextDocument, hasPreview: boolean, currentDir: vscode.Uri){
             this.doc = doc;
@@ -417,19 +419,37 @@ export function activate(context: vscode.ExtensionContext) {
             this.updateWatcher();
         }
 
+        cancelWatcherTimeout(){
+            if (this.watcherHandleEventTimeout){
+                clearTimeout(this.watcherHandleEventTimeout);
+            }
+        }
+
+        resetWatcherTimeout(){
+            // some filesystem changes can trigger onDidChange multiple times in quick succession
+            // we want to wait for a bit before updating the document content, otherwise we might do
+            // it multiple times in quick succession which causes some issues
+
+            this.cancelWatcherTimeout();
+            this.watcherHandleEventTimeout = setTimeout(async () => {
+                await updateDocContentToCurrentDir(this);
+            }, 100);
+        }
+
         updateWatcher(){
+            let timeout: NodeJS.Timeout = setTimeout(() => {}, 0);
             if (this.watcher){
                 this.watcher.dispose();
             }
             this.watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(this.currentDirectory.fsPath, '*'));
             this.watcher.onDidChange(async (e) => {
-                await updateDocContentToCurrentDir(this);
+                this.resetWatcherTimeout();
             });
             this.watcher.onDidDelete(async (e) => {
-                await updateDocContentToCurrentDir(this);
+                this.resetWatcherTimeout();
             });
             this.watcher.onDidCreate(async (e) => {
-                await updateDocContentToCurrentDir(this);
+                this.resetWatcherTimeout();
             });
         }
 
@@ -805,15 +825,32 @@ export function activate(context: vscode.ExtensionContext) {
             let prevContentOnDisk = await getContentForPath(vscode.Uri.parse(prevDirectory));
             updateCutIdentifiers(doc, prevContentOnDisk);
         }
+        let docTextEditor = doc.getTextEditor();
 
-        // set doc content
-        const edit = new vscode.WorkspaceEdit();
-        const fullRange = new vscode.Range(
-            doc.doc.positionAt(0),
-            doc.doc.positionAt(doc.doc.getText().length)
-        );
-        edit.replace(doc.doc.uri, fullRange, content);
-        await vscode.workspace.applyEdit(edit);
+        // why do we do two different things here?
+        // it is possible the the document doesn't have a text editor, so we need the second option for that case
+        // however, that does not work very well when there are multiple simulataneous updates (e.g. when a lot of files are being copied)
+        // so we have the first option as well
+        if (docTextEditor){
+            docTextEditor.edit((editBuilder) => {
+                editBuilder.replace(new vscode.Range(
+                    docTextEditor.document.positionAt(0),
+                    docTextEditor.document.positionAt(docTextEditor.document.getText().length)
+                ), content);
+            });
+        }
+        else{
+
+            // set doc content
+            const edit = new vscode.WorkspaceEdit();
+            const fullRange = new vscode.Range(
+                doc.doc.positionAt(0),
+                doc.doc.positionAt(doc.doc.getText().length)
+            );
+            edit.replace(doc.doc.uri, fullRange, content);
+            await vscode.workspace.applyEdit(edit);
+        }
+
     };
 
     vscode.window.onDidChangeActiveTextEditor(editor => {
