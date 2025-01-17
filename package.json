@@ -53,6 +53,14 @@
         "title": "vsoil: debug"
       },
       {
+        "command": "vsoil.toggleFileSize",
+        "title": "vsoil: toggle file size"
+      },
+      {
+        "command": "vsoil.toggleCreationDate",
+        "title": "vsoil: toggle file creation date"
+      },
+      {
         "command": "vsoil.saveLayout",
         "title": "vsoil: save layout"
       },
