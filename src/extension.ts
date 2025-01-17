@@ -23,8 +23,9 @@ class DirectoryListingData {
     isDir: boolean;
     name: string;
     isNew: boolean;
+    isCommand: boolean = false;
 
-    constructor(identifier: string, isDir: boolean, name: string, isNew: boolean) {
+    constructor(identifier: string, isDir: boolean, name: string, isNew: boolean=false) {
         this.identifier = identifier;
         this.isDir = isDir;
         this.name = name;
@@ -437,6 +438,25 @@ export function activate(context: vscode.ExtensionContext) {
             let endIndex = line.indexOf(METADATA_END_SYMBOL);
             line = line.slice(0, startIndex) + line.slice(endIndex + METADATA_END_SYMBOL.length);
         }
+        if (line.startsWith(":") || line.startsWith("'")){
+            return {
+                identifier: "",
+                isDir: false,
+                name: line,
+                isNew: true,
+                isCommand: true
+            };
+        }
+        if (((line.length > 1 && line[1] === ' ') || (line.trim().length === 1)) && !(line[0] === '-' || line[0] === '/')){
+            return {
+                identifier: "",
+                isDir: false,
+                name: line,
+                isNew: true,
+                isCommand: true
+            }
+        }
+
         // find the first index of '-' or '/'
         let regexp = new RegExp('[-/]');
         let index = line.search(regexp);
@@ -452,6 +472,7 @@ export function activate(context: vscode.ExtensionContext) {
                 isDir: typeString === '/',
                 name: name,
                 isNew: false,
+                isCommand: false
             };
         }
         else{
@@ -461,7 +482,8 @@ export function activate(context: vscode.ExtensionContext) {
                 identifier: '',
                 isDir: typeString === '/',
                 name: name,
-                isNew: !name.startsWith('.')
+                isNew: !name.startsWith('.'),
+                isCommand: false
             };
 
         }
@@ -486,9 +508,9 @@ export function activate(context: vscode.ExtensionContext) {
             if (line.trim().length === 0) {
                 continue;
             }
-            let { identifier, isDir, name, isNew } = parseLine(line);
+            let { identifier, isDir, name, isNew, isCommand } = parseLine(line);
             let oldList: DirectoryListingData[] = res.get(identifier) || [];
-            oldList.push({ identifier, isDir, name, isNew });
+            oldList.push({ identifier, isDir, name, isNew, isCommand });
             res.set(identifier, oldList);
         }
         return res;
@@ -513,6 +535,8 @@ export function activate(context: vscode.ExtensionContext) {
         showFileCreationDate: boolean = false;
         sortBy: SortBy = SortBy.Name;
         isAscending: boolean = true; 
+
+        filterString: string = "";
 
         constructor(doc: vscode.TextDocument, hasPreview: boolean, currentDir: vscode.Uri){
             this.doc = doc;
@@ -555,6 +579,10 @@ export function activate(context: vscode.ExtensionContext) {
         async sortBySize(){
             this.sortBy = SortBy.Size;
             await updateDocContentToCurrentDir(this)
+        }
+
+        async setFilterPattern(pattern: string) {
+            this.filterString = pattern;
         }
 
         async toggleSortOrder(){
@@ -755,6 +783,12 @@ export function activate(context: vscode.ExtensionContext) {
 
         let newNames : string[] = [];
 
+        if (doc.filterString.length > 0){
+            deletedIdentifiers.clear();
+            renamedIdentifiers.clear();
+            movedIdentifiers.clear();
+        }
+
         if (deletedIdentifiers.size > 0 || renamedIdentifiers.size > 0 || movedIdentifiers.size > 0){
             let response = await showDeleteConfirmation(deletedIdentifiers, renamedIdentifiers, movedIdentifiers);
             // make sure the document has focus
@@ -821,29 +855,50 @@ export function activate(context: vscode.ExtensionContext) {
                 continue;
             }
 
-            let { identifier, isDir, name, isNew } = parseLine(line);
+            let { identifier, isDir, name, isNew, isCommand } = parseLine(line);
             if (isNew) {
-                let fullPath = vscode.Uri.joinPath(doc.currentDir!, name + "/");
 
-                if (isDir) {
-                    let pathParts = fullPath.path.split('/');
-                    let isLastPartFile = pathParts[pathParts.length - 1].includes('.');
-                    if (isLastPartFile){
-                        let lastPartParentDir = pathParts.slice(0, pathParts.length - 1).join('/');
-                        await vscode.workspace.fs.createDirectory(vscode.Uri.parse(lastPartParentDir));
-                        await vscode.workspace.fs.writeFile(fullPath, new Uint8Array());
-                        newNames.push(name);
+                if (isCommand){
+                    modified = true;
+
+                    if (name.startsWith(":")){
+                        let command = name.slice(1).trim();
+
                     }
                     else{
-                        await vscode.workspace.fs.createDirectory(fullPath);
-                        newNames.push(name);
+                        let cmd = name[0];
+                        let cmdArg = name.slice(2).trim();
+                        if (cmd === 's'){
+                            await doc.setFilterPattern(cmdArg);
+                        }
+                        if (cmd === 'o'){
+                            vscode.env.openExternal(vscode.Uri.file(doc.currentDir.path));
+                        }
+
                     }
-                    modified = true;
                 }
-                else {
-                    await vscode.workspace.fs.writeFile(fullPath, new Uint8Array());
-                    newNames.push(name);
-                    modified = true;
+                else{
+                    let fullPath = vscode.Uri.joinPath(doc.currentDir!, name + "/");
+                    if (isDir) {
+                        let pathParts = fullPath.path.split('/');
+                        let isLastPartFile = pathParts[pathParts.length - 1].includes('.');
+                        if (isLastPartFile) {
+                            let lastPartParentDir = pathParts.slice(0, pathParts.length - 1).join('/');
+                            await vscode.workspace.fs.createDirectory(vscode.Uri.parse(lastPartParentDir));
+                            await vscode.workspace.fs.writeFile(fullPath, new Uint8Array());
+                            newNames.push(name);
+                        }
+                        else {
+                            await vscode.workspace.fs.createDirectory(fullPath);
+                            newNames.push(name);
+                        }
+                        modified = true;
+                    }
+                    else {
+                        await vscode.workspace.fs.writeFile(fullPath, new Uint8Array());
+                        newNames.push(name);
+                        modified = true;
+                    }
                 }
             }
         }
@@ -861,6 +916,7 @@ export function activate(context: vscode.ExtensionContext) {
     const handleEnter = vscode.commands.registerCommand('vsoil.handleEnter', async () => {
         let doc = await getVsoilDocForActiveEditor();
         if (!doc) return;
+        doc.filterString = '';
         // let activeEditor = doc.getTextEditor();
         // let currentCursorLineIndex = vscode.window.activeTextEditor?.selection.active.line;
         let currentCursorLineIndex = doc.getTextEditor()?.selection.active.line;
@@ -945,7 +1001,7 @@ export function activate(context: vscode.ExtensionContext) {
         return fileNameSorter(a, b);
     }
 
-    const getContentForPath = async (rootUri: vscode.Uri, showSize: boolean = false, showCreationDate: boolean = false, sortOrder: SortBy = SortBy.Name, ascending: boolean = true) => {
+    const getContentForPath = async (rootUri: vscode.Uri, showSize: boolean = false, showCreationDate: boolean = false, sortOrder: SortBy = SortBy.Name, ascending: boolean = true, filterPattern: string = "") => {
         let files = await vscode.workspace.fs.readDirectory(rootUri!);
         let content = '';
 
@@ -1034,6 +1090,11 @@ export function activate(context: vscode.ExtensionContext) {
 
         content += `/ ..\n`;
         for (let file of files) {
+
+            if (filterPattern && !file[0].includes(filterPattern)){
+                continue;
+            }
+
             let isDir = file[1] === vscode.FileType.Directory;
             let fullPath = vscode.Uri.joinPath(rootUri!, file[0]).path;
             let identifier = getIdentifierForPath(fullPath);
@@ -1087,7 +1148,7 @@ export function activate(context: vscode.ExtensionContext) {
     let updateDocContentToCurrentDir = async (doc: VsoilDoc, prevDirectory: string | undefined = undefined) => {
 
         let rootUri = doc.currentDir;
-        let content = await getContentForPath(rootUri!, doc.showFileSize, doc.showFileCreationDate, doc.sortBy, doc.isAscending);
+        let content = await getContentForPath(rootUri!, doc.showFileSize, doc.showFileCreationDate, doc.sortBy, doc.isAscending, doc.filterString);
 
         if (prevDirectory){
             let prevContentOnDisk = await getContentForPath(vscode.Uri.parse(prevDirectory));
