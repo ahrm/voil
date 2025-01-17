@@ -61,6 +61,22 @@
         "title": "vsoil: toggle file creation date"
       },
       {
+        "command": "vsoil.sortByFileName",
+        "title": "vsoil: sort by file name"
+      },
+      {
+        "command": "vsoil.sortByFileType",
+        "title": "vsoil: sort by file type"
+      },
+      {
+        "command": "vsoil.sortByFileCreationTime",
+        "title": "vsoil: sort by file creation time"
+      },
+      {
+        "command": "vsoil.sortByFileSize",
+        "title": "vsoil: sort by file size"
+      },
+      {
         "command": "vsoil.saveLayout",
         "title": "vsoil: save layout"
       },
