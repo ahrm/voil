@@ -77,6 +77,10 @@
         "title": "vsoil: sort by file size"
       },
       {
+        "command": "vsoil.toggleSortOrder",
+        "title": "vsoil: toggle sort order"
+      },
+      {
         "command": "vsoil.saveLayout",
         "title": "vsoil: save layout"
       },
