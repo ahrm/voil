@@ -699,12 +699,129 @@ export function activate(context: vscode.ExtensionContext) {
             this.currentDirectory = uri;
             this.updateWatcher();
         }
+
+        async getContentForPath (rootUri: vscode.Uri) {
+            let files = await vscode.workspace.fs.readDirectory(rootUri!);
+            let content = '';
+
+            let fileNameToMetadata: Map<string, string> = new Map();
+            let fileNameToStats: Map<string, vscode.FileStat> = new Map();
+
+            let needsMetaString = this.showFileSize || this.showFileCreationDate;
+            let maxMetadataSize = 0;
+            if (needsMetaString || this.sortBy === SortBy.Size || this.sortBy === SortBy.CreationDate) {
+                for (let file of files) {
+                    let fullPath = vscode.Uri.joinPath(rootUri!, file[0]).path;
+                    if ((process.platform === "win32") && ILLEGAL_FILE_NAMES_ON_WINDOWS.includes(file[0])) {
+                        continue;
+                    }
+                    let stats = await vscode.workspace.fs.stat(vscode.Uri.parse(fullPath));
+                    fileNameToStats.set(file[0], stats);
+
+                    if (needsMetaString) {
+                        let metaString = '';
+                        let numSeparators = 0;
+
+                        const addSeparator = () => {
+                            if (metaString.length > 0) {
+                                metaString += '|';
+                                numSeparators += 1;
+                            }
+                        };
+
+                        if (this.showFileSize) {
+                            let fileSizeString = getFileSizeHumanReadableName(stats.size);
+                            addSeparator();
+                            metaString += fileSizeString;
+                        }
+                        if (this.showFileCreationDate) {
+                            let fileDateString = new Date(stats.mtime).toLocaleDateString();
+                            addSeparator();
+                            metaString += fileDateString;
+
+                        }
+                        // let metaString = `${fileDateString}|${fileSizeString}`;
+                        fileNameToMetadata.set(file[0], metaString);
+                        let metaDataSize = IDENTIFIER_SIZE + 8 + numSeparators + metaString.length;
+                        if (metaDataSize > maxMetadataSize) {
+                            maxMetadataSize = metaDataSize;
+                        }
+
+                    }
+                }
+            }
+
+
+            let sorter = fileNameSorter;
+            if (this.sortBy === SortBy.FileType) {
+                sorter = fileTypeSorter;
+            }
+            if (this.sortBy === SortBy.CreationDate) {
+                let statsSorter = (a: [string, vscode.FileType], b: [string, vscode.FileType]) => {
+                    let aStats = fileNameToStats.get(a[0]);
+                    let bStats = fileNameToStats.get(b[0]);
+                    if (aStats && bStats) {
+                        return aStats.ctime - bStats.ctime;
+                    }
+                    return 0;
+                };
+                sorter = statsSorter;
+            }
+            if (this.sortBy === SortBy.Size) {
+                let sizeSorter = (a: [string, vscode.FileType], b: [string, vscode.FileType]) => {
+                    let aStats = fileNameToStats.get(a[0]);
+                    let bStats = fileNameToStats.get(b[0]);
+                    if (aStats && bStats) {
+                        return aStats.size - bStats.size;
+                    }
+                    return 0;
+                };
+                sorter = sizeSorter;
+            }
+
+            if (!this.isAscending) {
+                let oldSorter = sorter;
+                sorter = (a: [string, vscode.FileType], b: [string, vscode.FileType]) => -oldSorter(a, b);
+            }
+
+            // first show directories and then files
+            files.sort(sorter);
+
+            content += `/ ..\n`;
+            for (let file of files) {
+
+                if (this.filterString && !file[0].includes(this.filterString)) {
+                    continue;
+                }
+
+                let isDir = file[1] === vscode.FileType.Directory;
+                let fullPath = vscode.Uri.joinPath(rootUri!, file[0]).path;
+                let identifier = getIdentifierForPath(fullPath);
+                let meta = '';
+                if (this.showFileSize || this.showFileCreationDate) {
+                    meta = fileNameToMetadata.get(file[0]) ?? '';
+                    meta = METADATA_BEGIN_SYMBOL + meta + METADATA_END_SYMBOL;
+                }
+
+                let lineContent = '';
+                if (isDir) {
+                    lineContent = `${identifier} / ${meta}`;
+                }
+                else {
+                    lineContent = `${identifier} - ${meta}`;
+                }
+                // pad line content to maxMetadataSize
+                lineContent = lineContent.padEnd(maxMetadataSize, ' ');
+                content += `${lineContent}${file[0]}\n`;
+            }
+            return content;
+        }
     }
 
     const handleSave = vscode.commands.registerCommand('vsoil.handleSave', async () => {
         let doc = await getVsoilDocForActiveEditor();
         if (!doc) return;
-        let originalContent = await getContentForPath(doc.currentDir!);
+        let originalContent = await doc.getContentForPath(doc.currentDir!);
         var originalIdentifiers: Map<string, DirectoryListingData[]> = getIdentifiersFromContent(originalContent);
         let content = doc.doc.getText();
         var newIdentifiers: Map<string, DirectoryListingData[]> = getIdentifiersFromContent(content);
@@ -782,12 +899,6 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         let newNames : string[] = [];
-
-        if (doc.filterString.length > 0){
-            deletedIdentifiers.clear();
-            renamedIdentifiers.clear();
-            movedIdentifiers.clear();
-        }
 
         if (deletedIdentifiers.size > 0 || renamedIdentifiers.size > 0 || movedIdentifiers.size > 0){
             let response = await showDeleteConfirmation(deletedIdentifiers, renamedIdentifiers, movedIdentifiers);
@@ -916,7 +1027,6 @@ export function activate(context: vscode.ExtensionContext) {
     const handleEnter = vscode.commands.registerCommand('vsoil.handleEnter', async () => {
         let doc = await getVsoilDocForActiveEditor();
         if (!doc) return;
-        doc.filterString = '';
         // let activeEditor = doc.getTextEditor();
         // let currentCursorLineIndex = vscode.window.activeTextEditor?.selection.active.line;
         let currentCursorLineIndex = doc.getTextEditor()?.selection.active.line;
@@ -927,6 +1037,7 @@ export function activate(context: vscode.ExtensionContext) {
             var focusLine = '';
 
             if (isDir){
+                doc.filterString = '';
                 if (currentDirName === '..') {
                     // focusline should be the last part of current path
                     let pathParts = doc.currentDir?.path.split('/');
@@ -1001,122 +1112,6 @@ export function activate(context: vscode.ExtensionContext) {
         return fileNameSorter(a, b);
     }
 
-    const getContentForPath = async (rootUri: vscode.Uri, showSize: boolean = false, showCreationDate: boolean = false, sortOrder: SortBy = SortBy.Name, ascending: boolean = true, filterPattern: string = "") => {
-        let files = await vscode.workspace.fs.readDirectory(rootUri!);
-        let content = '';
-
-        let fileNameToMetadata: Map<string, string> = new Map();
-        let fileNameToStats: Map<string, vscode.FileStat> = new Map();
-
-        let needsMetaString = showSize || showCreationDate;
-        let maxMetadataSize = 0;
-        if (needsMetaString || sortOrder === SortBy.Size || sortOrder === SortBy.CreationDate) {
-            for (let file of files) {
-                let fullPath = vscode.Uri.joinPath(rootUri!, file[0]).path;
-                if ((process.platform === "win32") && ILLEGAL_FILE_NAMES_ON_WINDOWS.includes(file[0])){
-                    continue;
-                }
-                let stats = await vscode.workspace.fs.stat(vscode.Uri.parse(fullPath));
-                fileNameToStats.set(file[0], stats);
-
-                if (needsMetaString) {
-                    let metaString = '';
-                    let numSeparators = 0;
-
-                    const addSeparator = () => {
-                        if (metaString.length > 0) {
-                            metaString += '|';
-                            numSeparators += 1;
-                        }
-                    };
-
-                    if (showSize) {
-                        let fileSizeString = getFileSizeHumanReadableName(stats.size);
-                        addSeparator();
-                        metaString += fileSizeString;
-                    }
-                    if (showCreationDate) {
-                        let fileDateString = new Date(stats.mtime).toLocaleDateString();
-                        addSeparator();
-                        metaString += fileDateString;
-
-                    }
-                    // let metaString = `${fileDateString}|${fileSizeString}`;
-                    fileNameToMetadata.set(file[0], metaString);
-                    let metaDataSize = IDENTIFIER_SIZE + 8 + numSeparators + metaString.length;
-                    if (metaDataSize > maxMetadataSize) {
-                        maxMetadataSize = metaDataSize;
-                    }
-
-                }
-            }
-        }
-
-
-        let sorter = fileNameSorter;
-        if (sortOrder === SortBy.FileType){
-            sorter = fileTypeSorter;
-        }
-        if (sortOrder === SortBy.CreationDate){
-            let statsSorter = (a: [string, vscode.FileType], b: [string, vscode.FileType]) => {
-                let aStats = fileNameToStats.get(a[0]);
-                let bStats = fileNameToStats.get(b[0]);
-                if (aStats && bStats){
-                    return aStats.ctime - bStats.ctime;
-                }
-                return 0;
-            };
-            sorter = statsSorter;
-        }
-        if (sortOrder === SortBy.Size){
-            let sizeSorter = (a: [string, vscode.FileType], b: [string, vscode.FileType]) => {
-                let aStats = fileNameToStats.get(a[0]);
-                let bStats = fileNameToStats.get(b[0]);
-                if (aStats && bStats){
-                    return aStats.size - bStats.size;
-                }
-                return 0;
-            };
-            sorter = sizeSorter;
-        }
-
-        if (!ascending){
-            let oldSorter = sorter;
-            sorter = (a: [string, vscode.FileType], b: [string, vscode.FileType]) => -oldSorter(a, b);
-        }
-
-        // first show directories and then files
-        files.sort(sorter);
-
-        content += `/ ..\n`;
-        for (let file of files) {
-
-            if (filterPattern && !file[0].includes(filterPattern)){
-                continue;
-            }
-
-            let isDir = file[1] === vscode.FileType.Directory;
-            let fullPath = vscode.Uri.joinPath(rootUri!, file[0]).path;
-            let identifier = getIdentifierForPath(fullPath);
-            let meta = '';
-            if (showSize || showCreationDate) {
-                meta = fileNameToMetadata.get(file[0]) ?? '';
-                meta = METADATA_BEGIN_SYMBOL + meta + METADATA_END_SYMBOL;
-            }
-
-            let lineContent = '';
-            if (isDir) {
-                lineContent = `${identifier} / ${meta}`;
-            }
-            else {
-                lineContent = `${identifier} - ${meta}`;
-            }
-            // pad line content to maxMetadataSize
-            lineContent = lineContent.padEnd(maxMetadataSize, ' ');
-            content += `${lineContent}${file[0]}\n`;
-        }
-        return content;
-    }
 
     const getCutIdentifiersFromFileContents = (prevContentOnDisk: string, prevContentOnFile: string) => {
         let diskIdentifiers = new Set<string>();
@@ -1148,10 +1143,10 @@ export function activate(context: vscode.ExtensionContext) {
     let updateDocContentToCurrentDir = async (doc: VsoilDoc, prevDirectory: string | undefined = undefined) => {
 
         let rootUri = doc.currentDir;
-        let content = await getContentForPath(rootUri!, doc.showFileSize, doc.showFileCreationDate, doc.sortBy, doc.isAscending, doc.filterString);
+        let content = await doc.getContentForPath(rootUri!);
 
         if (prevDirectory){
-            let prevContentOnDisk = await getContentForPath(vscode.Uri.parse(prevDirectory));
+            let prevContentOnDisk = await doc.getContentForPath(vscode.Uri.parse(prevDirectory));
             updateCutIdentifiers(doc, prevContentOnDisk);
         }
         let docTextEditor = doc.getTextEditor();
@@ -1313,7 +1308,7 @@ export function activate(context: vscode.ExtensionContext) {
                 let doc = await getVsoilDocForEditor(prevEditor);
                 if (doc) {
                     let prevDirectory = doc.currentDir?.path;
-                    let prevListingContent = await getContentForPath(vscode.Uri.parse(prevDirectory!));
+                    let prevListingContent = await doc.getContentForPath(vscode.Uri.parse(prevDirectory!));
                     updateCutIdentifiers(doc, prevListingContent);
                 }
             }
@@ -1373,7 +1368,7 @@ export function activate(context: vscode.ExtensionContext) {
                     else{
                         // show the directory listing in previewDoc
                         let dirPath = vscode.Uri.joinPath(doc.currentDir!, name);
-                        let content = await getContentForPath(dirPath);
+                        let content = await doc.getContentForPath(dirPath);
                         let newdoc = await getPreviewDoc();
                         const edit = new vscode.WorkspaceEdit();
                         const fullRange = new vscode.Range(
