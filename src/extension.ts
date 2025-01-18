@@ -17,6 +17,10 @@ const ILLEGAL_FILE_NAMES_ON_WINDOWS = [
     "$RECYCLE.BIN",
     "DumpStack.log.tmp"
 ];
+const MAX_RECURSIVE_DIR_LISTING_SIZE = 100000;
+const IGNORED_DIRNAMES = [
+    ".git",
+]
 
 class DirectoryListingData {
     identifier: string;
@@ -324,6 +328,12 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     const debugCommand = vscode.commands.registerCommand('vsoil.debug', async () => {
+        let vsoil = await getVsoilDocForActiveEditor();
+        if (vsoil){
+            vsoil.showRecursive = !vsoil.showRecursive;
+            await updateDocContentToCurrentDir(vsoil);
+        }
+
         // show a list of custom shell commands to the user and return the selected one 
         // if (customShellCommands){
         //     let selectedShellCommandName = await vscode.window.showQuickPick(customShellCommands?.map((cmd) => cmd.name));
@@ -538,6 +548,8 @@ export function activate(context: vscode.ExtensionContext) {
 
         filterString: string = "";
 
+        showRecursive: boolean = false;
+
         constructor(doc: vscode.TextDocument, hasPreview: boolean, currentDir: vscode.Uri){
             this.doc = doc;
             this.hasPreview = hasPreview;
@@ -700,8 +712,43 @@ export function activate(context: vscode.ExtensionContext) {
             this.updateWatcher();
         }
 
+        async getFilesRecursive(rootUri: vscode.Uri, prefix: string='', ignoredPatterns: string[] = []): Promise<[string, vscode.FileType][]> {
+            let files = await vscode.workspace.fs.readDirectory(rootUri);
+            let res: [string, vscode.FileType][] = [];
+            let gitignoreFile = vscode.Uri.joinPath(rootUri, '.gitignore');
+            if (await vscode.workspace.fs.stat(gitignoreFile).then(() => true, () => false)){
+                let gitignoreContent = (await vscode.workspace.fs.readFile(gitignoreFile)).toString();
+                ignoredPatterns = ignoredPatterns.concat(gitignoreContent.split('\n').filter((line) => line.trim().length > 0));
+            }
+            for (let [name, type] of files){
+                if (ignoredPatterns.some((pattern) => name.includes(pattern))){
+                    continue;
+                }
+                if (type === vscode.FileType.Directory){
+                    if (IGNORED_DIRNAMES.includes(name)){
+                        continue;
+                    }
+                    
+                    let newPrefix = prefix + name + '/';
+                    let subFiles = await this.getFilesRecursive(vscode.Uri.joinPath(rootUri, name), newPrefix);
+                    res.push(...subFiles);
+                }
+                else{
+                    res.push([prefix + name, type]);
+                }
+                if (res.length > MAX_RECURSIVE_DIR_LISTING_SIZE){
+                    // alert the user that the listing is too large
+                    break;
+                }
+            }
+            return res;
+        }
+
         async getContentForPath (rootUri: vscode.Uri) {
             let files = await vscode.workspace.fs.readDirectory(rootUri!);
+            if (this.showRecursive){
+                files = await this.getFilesRecursive(rootUri);
+            }
             let content = '';
 
             let fileNameToMetadata: Map<string, string> = new Map();
