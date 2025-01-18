@@ -734,9 +734,9 @@ export function activate(context: vscode.ExtensionContext) {
             return res;
         }
 
-        async getContentForPath (rootUri: vscode.Uri) {
+        async getContentForPath (rootUri: vscode.Uri, isPreview: boolean = false) {
             let files = await vscode.workspace.fs.readDirectory(rootUri!);
-            if (this.showRecursive){
+            if (!isPreview && this.showRecursive){
                 files = await this.getFilesRecursive(rootUri);
             }
             let content = '';
@@ -1427,7 +1427,7 @@ export function activate(context: vscode.ExtensionContext) {
                     else{
                         // show the directory listing in previewDoc
                         let dirPath = vscode.Uri.joinPath(doc.currentDir!, name);
-                        let content = await doc.getContentForPath(dirPath);
+                        let content = await doc.getContentForPath(dirPath, true);
                         let newdoc = await getPreviewDoc();
                         const edit = new vscode.WorkspaceEdit();
                         const fullRange = new vscode.Range(
