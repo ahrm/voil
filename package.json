@@ -53,6 +53,10 @@
         "title": "vsoil: Toggle recursive listing"
       },
       {
+        "command": "vsoil.gotoParentDir",
+        "title": "vsoil: Go to parent directory"
+      },
+      {
         "command": "vsoil.debug",
         "title": "vsoil: debug"
       },

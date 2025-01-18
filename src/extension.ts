@@ -347,6 +347,16 @@ export function activate(context: vscode.ExtensionContext) {
         restoreEditorLayout();
     });
 
+    const gotoParentDirCommand = vscode.commands.registerCommand('vsoil.gotoParentDir', async () => {
+        let vsoil = await getVsoilDocForActiveEditor();
+        if (vsoil){
+            let parentDir = vscode.Uri.joinPath(vsoil.currentDir, '..');
+            vsoil.currentDir = parentDir;
+            await updateDocContentToCurrentDir(vsoil);
+        }
+    });
+    
+
     const openCurrentDirectory = vscode.commands.registerCommand('vsoil.openCurrentDirectory', async () => {
         let doc = await getVsoilDocForActiveEditor();
         if (doc) {
