@@ -49,6 +49,10 @@
         "title": "vsoil: Toggle the vsoil preview window"
       },
       {
+        "command": "vsoil.toggleRecursive",
+        "title": "vsoil: Toggle recursive listing"
+      },
+      {
         "command": "vsoil.debug",
         "title": "vsoil: debug"
       },

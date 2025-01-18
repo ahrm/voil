@@ -327,36 +327,16 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    const debugCommand = vscode.commands.registerCommand('vsoil.debug', async () => {
+
+    const toggleRecursiveCommand = vscode.commands.registerCommand('vsoil.toggleRecursive', async () => {
         let vsoil = await getVsoilDocForActiveEditor();
         if (vsoil){
             vsoil.showRecursive = !vsoil.showRecursive;
             await updateDocContentToCurrentDir(vsoil);
         }
+    });
 
-        // show a list of custom shell commands to the user and return the selected one 
-        // if (customShellCommands){
-        //     let selectedShellCommandName = await vscode.window.showQuickPick(customShellCommands?.map((cmd) => cmd.name));
-        //     let selectedShellCommand = customShellCommands.find((cmd) => cmd.name === selectedShellCommandName);
-        //     let vsoil = await getVsoilDocForActiveEditor();
-        //     if (vsoil && selectedShellCommand){
-        //         let cmdWithInputs = await selectedShellCommand.getInputs();
-        //         vsoil.runShellCommandOnSelectedItems(cmdWithInputs);
-        //     }
-
-        // }
-        
-
-        // let vsoil = await getVsoilDocForActiveEditor();
-        // if (vsoil !== undefined){
-        //     let { name } = vsoil?.getSelectedItem()!;
-        //     var fullPath = vscode.Uri.joinPath(vsoil?.currentDir!, name).path;
-        //     if (fullPath[0] == "/" && (process.platform === "win32")) {
-        //         fullPath = fullPath.slice(1);
-        //     }
-        //     let commandToOpenInNvim = `nvim-qt ${fullPath}`;
-        //     runShellCommand(commandToOpenInNvim);
-        // }
+    const debugCommand = vscode.commands.registerCommand('vsoil.debug', async () => {
     });
 
     const saveLayoutCommand = vscode.commands.registerCommand('vsoil.saveLayout', () => {
