@@ -1,6 +1,5 @@
 // c-o does not work well with preview document
 // preview mode can not launch if the current file does not exist
-// statusbar icon should show filter
 
 import { copyFileSync, rename } from 'fs';
 import * as vscode from 'vscode';
@@ -1343,7 +1342,6 @@ export function activate(context: vscode.ExtensionContext) {
         if (currentDocumentPath){
             if (!currentDocumentPath.toString().endsWith(".vsoil")){
                 currentDocumentName = path.basename(currentDocumentPath.path);
-                let currentDirectoryName = path.dirname(currentDocumentPath.path);
                 parentUri = vscode.Uri.joinPath(currentDocumentPath!, '..');
             }
         }
@@ -1358,8 +1356,10 @@ export function activate(context: vscode.ExtensionContext) {
         let parentUri = vscode.workspace.workspaceFolders?.[0].uri!;
         let currentDocumentName = undefined;
         if (currentDocumentPath){
-            currentDocumentName = path.basename(currentDocumentPath.path);
-            parentUri = vscode.Uri.joinPath(currentDocumentPath!, '..');
+            if (!currentDocumentPath.toString().endsWith(".vsoil")){
+                currentDocumentName = path.basename(currentDocumentPath.path);
+                parentUri = vscode.Uri.joinPath(currentDocumentPath!, '..');
+            }
         }
         let doc = await getVsoilDoc();
         await handleStartVsoil(doc, parentUri, currentDocumentName);
@@ -1423,6 +1423,7 @@ export function activate(context: vscode.ExtensionContext) {
                 }
             }
 
+            // update the statusbar item
             let doc = await getVsoilDocForEditor(editor);
             if (doc) {
                 updateStatusbar(doc);
