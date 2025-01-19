@@ -540,6 +540,9 @@ export function activate(context: vscode.ExtensionContext) {
             if (line.trim().length === 0) {
                 continue;
             }
+            if (line.trim() === PREVDIR_LINE){
+                continue;
+            }
             let { identifier, isDir, name, isNew, isCommand } = parseLine(line);
             let oldList: DirectoryListingData[] = res.get(identifier) || [];
             oldList.push({ identifier, isDir, name, isNew, isCommand });
@@ -1107,18 +1110,8 @@ export function activate(context: vscode.ExtensionContext) {
                 else{
                     let fullPath = vscode.Uri.joinPath(doc.currentDir!, name + "/");
                     if (isDir) {
-                        let pathParts = getPathParts(fullPath.path);
-                        let isLastPartFile = pathParts[pathParts.length - 1].includes('.');
-                        if (isLastPartFile) {
-                            let lastPartParentDir = pathParts.slice(0, pathParts.length - 1).join('/');
-                            await vscode.workspace.fs.createDirectory(vscode.Uri.parse(lastPartParentDir));
-                            await vscode.workspace.fs.writeFile(fullPath, new Uint8Array());
-                            newNames.push(name);
-                        }
-                        else {
-                            await vscode.workspace.fs.createDirectory(fullPath);
-                            newNames.push(name);
-                        }
+                        await vscode.workspace.fs.createDirectory(fullPath);
+                        newNames.push(name);
                         modified = true;
                     }
                     else {

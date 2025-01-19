@@ -16,6 +16,10 @@
   {
     "match": "^[a-zA-z]{7} / .*$",
     "name": "vsoil.dirtype.dir"
+  },
+  {
+    "match": "\\.\\./",
+    "name": "vsoil.dirtype.dir"
   }
 ],
   "repository": {
