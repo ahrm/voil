@@ -1,6 +1,9 @@
-// todo: syntax highlight 
-// todo: add an option to run a command line program on selected items
 // c-o does not work well with preview document
+// preview mode can not launch if the current file does not exist
+// we don't focus on the new file when a file is copied
+// we don't focus when going back using -
+// test making directories with dots in name
+// statusbar icon should show filter
 
 import { copyFileSync, rename } from 'fs';
 import * as vscode from 'vscode';
@@ -591,6 +594,21 @@ export function activate(context: vscode.ExtensionContext) {
             this.isAscending = !this.isAscending;
             await updateDocContentToCurrentDir(this);
         }
+
+        async focusOnLineWithContent(lineContent: string){
+            let docText = this.doc?.getText();
+            let lineIndex = this.doc?.getText().split('\n').findIndex((line) => line.trimEnd().endsWith(` ${lineContent}`));
+            if (lineIndex !== undefined && lineIndex !== -1) {
+                let line = this.doc?.lineAt(lineIndex);
+                if (line) {
+                    let selection = new vscode.Selection(line.range.start, line.range.start);
+                    if (vscode.window.activeTextEditor) {
+                        vscode.window.activeTextEditor.selection = selection;
+                        vscode.window.activeTextEditor.revealRange(new vscode.Range(selection.start, selection.end));
+                    }
+                }
+            }
+        }
         
 
         resetWatcherTimeout(){
@@ -1112,18 +1130,7 @@ export function activate(context: vscode.ExtensionContext) {
                 }
                 await updateDocContentToCurrentDir(doc, prevDirectory);
                 if (focusLine){
-                    let docText = doc.doc?.getText();
-                    let lineIndex = doc.doc?.getText().split('\n').findIndex((line) => line.trimEnd().endsWith(` ${focusLine}`));
-                    if (lineIndex !== undefined && lineIndex !== -1){
-                        let line = doc.doc?.lineAt(lineIndex);
-                        if (line){
-                            let selection = new vscode.Selection(line.range.start, line.range.start);
-                            if (vscode.window.activeTextEditor) {
-                                vscode.window.activeTextEditor.selection = selection;
-                                vscode.window.activeTextEditor.revealRange(new vscode.Range(selection.start, selection.end));
-                            }
-                        }
-                    }
+                    doc.focusOnLineWithContent(focusLine);
                 }
             }
             else{
