@@ -1,6 +1,5 @@
 // c-o does not work well with preview document
 // preview mode can not launch if the current file does not exist
-// test making directories with dots in name
 // statusbar icon should show filter
 
 import { copyFileSync, rename } from 'fs';
@@ -174,7 +173,19 @@ class CustomShellCommand{
     }
 };
 
+let filterStatusBarItem: vscode.StatusBarItem;
+
 export function activate(context: vscode.ExtensionContext) {
+
+    function updateStatusbar(voil: VsoilDoc) {
+        if (voil.filterString.length > 0) {
+            filterStatusBarItem.text = `$(search) filter: ${voil.filterString}`;
+            filterStatusBarItem.show();
+        }
+        else {
+            filterStatusBarItem.hide();
+        }
+    }
 
     // var currentDir = vscode.workspace.workspaceFolders?.[0].uri;
     var vsoilPanel: VsoilDoc | undefined = undefined;
@@ -620,6 +631,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         setFilterPattern(pattern: string) {
             this.filterString = pattern;
+            updateStatusbar(this);
         }
 
         async toggleSortOrder(){
@@ -1275,10 +1287,6 @@ export function activate(context: vscode.ExtensionContext) {
 
     };
 
-    vscode.window.onDidChangeActiveTextEditor(editor => {
-        vscode.commands.executeCommand('setContext', 'vsoilDoc', editor?.document.uri.fsPath.endsWith('.vsoil'));
-    });
-
     const handleStartVsoil = async (doc: VsoilDoc, initialUri: vscode.Uri, fileToFocus: string | undefined = undefined) => {
         // doc.currentDir = vscode.workspace.workspaceFolders?.[0].uri!;
         doc.currentDir = initialUri;
@@ -1397,6 +1405,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor(async (editor) => {
+
+            vscode.commands.executeCommand('setContext', 'vsoilDoc', editor?.document.uri.fsPath.endsWith('.vsoil'));
+
             // when active editor changes, update the cut identifiers
             // this is to enable cutting between different vsoil panels
             // for example, in a two panel layout, if you cut a file in one panel and paste it in another panel
@@ -1410,6 +1421,13 @@ export function activate(context: vscode.ExtensionContext) {
                     let prevListingContent = await doc.getContentForPath(vscode.Uri.parse(prevDirectory!));
                     updateCutIdentifiers(doc, prevListingContent);
                 }
+            }
+
+            let doc = await getVsoilDocForEditor(editor);
+            if (doc) {
+                updateStatusbar(doc);
+            } else {
+                filterStatusBarItem.hide();
             }
         })
     );
@@ -1505,6 +1523,10 @@ export function activate(context: vscode.ExtensionContext) {
             }
         })
     );
+
+    filterStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
+    filterStatusBarItem.text = "$(search) filter: (none)";
+    // filterStatusBarItem.show();
 }
 
 // This method is called when your extension is deactivated
