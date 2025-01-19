@@ -167,6 +167,11 @@
           "default": true,
           "description": "Automatically open the preview window when the vsoil window is opened."
         },
+        "vsoil.allowFocusOnIdentifier": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow focusing the cursor on the identifier in the vsoil window."
+        },
         "vsoil.customShellCommands": {
           "type": "array",
           "default": [],

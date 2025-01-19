@@ -1,7 +1,6 @@
 // c-o does not work well with preview document
 // preview mode can not launch if the current file does not exist
 // we don't focus on the new file when a file is copied
-// we don't focus when going back using -
 // test making directories with dots in name
 // statusbar icon should show filter
 
@@ -185,8 +184,18 @@ export function activate(context: vscode.ExtensionContext) {
 
     // let previewEnabled = false;
     let previewEnabled = config.get<boolean>('previewAutoOpen') ?? false;
+    let allowFocusOnIdentifier = config.get<boolean>('allowFocusOnIdentifier') ?? false;
     let customShellCommands_ = config.get<CustomShellCommand[]>('customShellCommands');
     let customShellCommands = customShellCommands_?.map((cmd) => new CustomShellCommand(cmd.name, cmd.id, cmd.cmd));
+
+    // update the settings when they change
+    vscode.workspace.onDidChangeConfiguration((e) => {
+        config = vscode.workspace.getConfiguration('vsoil');
+        previewEnabled = config.get<boolean>('previewAutoOpen') ?? false;
+        allowFocusOnIdentifier = config.get<boolean>('allowFocusOnIdentifier') ?? false;
+        customShellCommands_ = config.get<CustomShellCommand[]>('customShellCommands');
+        customShellCommands = customShellCommands_?.map((cmd) => new CustomShellCommand(cmd.name, cmd.id, cmd.cmd));
+    });
 
 
     const togglePreview = vscode.commands.registerCommand('vsoil.togglePreview', () => {
@@ -1384,6 +1393,9 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    const LISTING_PREFIX_SIZE = IDENTIFIER_SIZE + 3; 
+    const LISTING_REGEX = new RegExp('^[a-zA-Z]{7} [-/] ');
+
     context.subscriptions.push(
         vscode.window.onDidChangeTextEditorSelection(async (event) => {
             if (!event.textEditor.document.uri.fsPath.endsWith('.vsoil')) {
@@ -1392,6 +1404,22 @@ export function activate(context: vscode.ExtensionContext) {
 
             let doc = await getVsoilDocForActiveEditor();
             if (doc == undefined) return;
+
+            // if there is no text selection
+            if (!allowFocusOnIdentifier){
+                if (event.selections.length === 1 && event.selections[0].start.line === event.selections[0].end.line) {
+                    let startsWithListingRegex = LISTING_REGEX.test(event.textEditor.document.lineAt(event.selections[0].start.line).text);
+                    if (startsWithListingRegex) {
+                        // make sure that the cursor can not be before LISTING_PREFIX_SIZE
+                        if (event.selections[0].active.character < LISTING_PREFIX_SIZE) {
+                            let newPosition = event.selections[0].active.with({ character: LISTING_PREFIX_SIZE });
+                            event.textEditor.selection = new vscode.Selection(newPosition, newPosition);
+                            return;
+                        }
+                    }
+                }
+            }
+
             if (doc.hasPreview === false) return;
 
             // when selection changes, update the preview window
