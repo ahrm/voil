@@ -942,6 +942,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
 
+        let newNames : string[] = [];
         for (let [identifier, items] of copiedIdentifiers){
             let originalPath = getPathForIdentifier(identifier);
             for (let item of items){
@@ -952,6 +953,7 @@ export function activate(context: vscode.ExtensionContext) {
                     let newIdentifier = getIdentifierForPath(newPath);
                     pathToIdentifierMap.set(newPath, newIdentifier);
                     identifierToPathMap.set(newIdentifier, newPath);
+                    newNames.push(item.name);
                 }
             }
         }
@@ -964,7 +966,6 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }
 
-        let newNames : string[] = [];
 
         if (deletedIdentifiers.size > 0 || renamedIdentifiers.size > 0 || movedIdentifiers.size > 0){
             let response = await showDeleteConfirmation(deletedIdentifiers, renamedIdentifiers, movedIdentifiers);
