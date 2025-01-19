@@ -354,8 +354,10 @@ export function activate(context: vscode.ExtensionContext) {
         let vsoil = await getVsoilDocForActiveEditor();
         if (vsoil){
             let parentDir = vscode.Uri.joinPath(vsoil.currentDir, '..');
+            let currentDirectoryName = path.basename(vsoil.currentDir.path);
             vsoil.currentDir = parentDir;
             await updateDocContentToCurrentDir(vsoil);
+            await vsoil.focusOnLineWithContent(currentDirectoryName);
         }
     });
     
@@ -1303,6 +1305,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (currentDocumentPath){
             if (!currentDocumentPath.toString().endsWith(".vsoil")){
                 currentDocumentName = path.basename(currentDocumentPath.path);
+                let currentDirectoryName = path.dirname(currentDocumentPath.path);
                 parentUri = vscode.Uri.joinPath(currentDocumentPath!, '..');
             }
         }
