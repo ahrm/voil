@@ -1,6 +1,5 @@
 // c-o does not work well with preview document
 // preview mode can not launch if the current file does not exist
-// we don't focus on the new file when a file is copied
 // test making directories with dots in name
 // statusbar icon should show filter
 
@@ -24,6 +23,10 @@ const IGNORED_DIRNAMES = [
     ".git",
 ]
 
+const getPathParts = (path: string | undefined) => {
+    if (path === undefined) return [];
+    return path.split('/').filter((part, index) => (index === 0) || (part.length > 0));
+}
 class DirectoryListingData {
     identifier: string;
     isDir: boolean;
@@ -37,6 +40,7 @@ class DirectoryListingData {
         this.name = name;
         this.isNew = isNew;
     }
+
 }
 
 class RenamedDirectoryListingItem{
@@ -366,7 +370,7 @@ export function activate(context: vscode.ExtensionContext) {
             let currentDirectoryName = path.basename(vsoil.currentDir.path);
             vsoil.currentDir = parentDir;
             await updateDocContentToCurrentDir(vsoil);
-            await vsoil.focusOnLineWithContent(currentDirectoryName);
+            await vsoil.focusOnLineWithContent(currentDirectoryName + "/");
         }
     });
     
@@ -876,9 +880,10 @@ export function activate(context: vscode.ExtensionContext) {
                 else {
                     lineContent = `${identifier} - ${meta}`;
                 }
+                let dirPostfix = isDir ? '/' : '';
                 // pad line content to maxMetadataSize
                 lineContent = lineContent.padEnd(maxMetadataSize, ' ');
-                content += `${lineContent}${file[0]}\n`;
+                content += `${lineContent}${file[0]}${dirPostfix}\n`;
             }
             return content;
         }
@@ -898,13 +903,17 @@ export function activate(context: vscode.ExtensionContext) {
 
         for (let [identifier, items] of newIdentifiers){
             let originalPath = getPathForIdentifier(identifier);
-            let originalParentPath = originalPath?.split('/').slice(0, -1).join('/');
+            let originalParentPath = getPathParts(originalPath).slice(0, -1).join('/');
             let isCurrentDirTheSameAsOriginal = doc.currentDir?.path === originalParentPath;
             let newItems: DirectoryListingData[] = [];
             let originalExists = false;
 
             for (let item of items){
-                let itemPath = vscode.Uri.joinPath(doc.currentDir!, item.name).path;
+                let itemName = item.name;
+                if (item.isDir && itemName.endsWith("/")){
+                    itemName = itemName.slice(0, -1);
+                }
+                let itemPath = vscode.Uri.joinPath(doc.currentDir!, itemName).path;
                 if (originalPath && originalPath !== itemPath){
                     newItems.push(item);
                 }
@@ -1080,7 +1089,7 @@ export function activate(context: vscode.ExtensionContext) {
                 else{
                     let fullPath = vscode.Uri.joinPath(doc.currentDir!, name + "/");
                     if (isDir) {
-                        let pathParts = fullPath.path.split('/');
+                        let pathParts = getPathParts(fullPath.path);
                         let isLastPartFile = pathParts[pathParts.length - 1].includes('.');
                         if (isLastPartFile) {
                             let lastPartParentDir = pathParts.slice(0, pathParts.length - 1).join('/');
@@ -1129,7 +1138,7 @@ export function activate(context: vscode.ExtensionContext) {
                 doc.filterString = '';
                 if (currentDirName === '..') {
                     // focusline should be the last part of current path
-                    let pathParts = doc.currentDir?.path.split('/');
+                    let pathParts = getPathParts(doc.currentDir?.path);
                     focusLine = pathParts?.[pathParts.length - 1] ?? '';
                     doc.currentDir = vscode.Uri.joinPath(doc.currentDir!, '..');
                 }
@@ -1142,7 +1151,7 @@ export function activate(context: vscode.ExtensionContext) {
                 }
                 await updateDocContentToCurrentDir(doc, prevDirectory);
                 if (focusLine){
-                    doc.focusOnLineWithContent(focusLine);
+                    doc.focusOnLineWithContent(focusLine + "/");
                 }
             }
             else{
