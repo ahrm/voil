@@ -13,6 +13,7 @@ import { platform } from 'os';
 const IDENTIFIER_SIZE = 7;
 const METADATA_BEGIN_SYMBOL = "/[";
 const METADATA_END_SYMBOL = "]/"
+const PREVDIR_LINE = "../";
 const ILLEGAL_FILE_NAMES_ON_WINDOWS = [
     "System Volume Information",
     "$RECYCLE.BIN",
@@ -459,7 +460,7 @@ export function activate(context: vscode.ExtensionContext) {
             let endIndex = line.indexOf(METADATA_END_SYMBOL);
             line = line.slice(0, startIndex) + line.slice(endIndex + METADATA_END_SYMBOL.length);
         }
-        if (line == '/ ..'){
+        if (line == PREVDIR_LINE){
             return {
                 identifier: "",
                 isDir: true,
@@ -870,7 +871,7 @@ export function activate(context: vscode.ExtensionContext) {
             // first show directories and then files
             files.sort(sorter);
 
-            content += `/ ..\n`;
+            content += `${PREVDIR_LINE}\n`;
             for (let file of files) {
 
                 if (this.filterString && !file[0].includes(this.filterString)) {
