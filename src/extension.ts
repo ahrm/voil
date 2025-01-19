@@ -450,13 +450,25 @@ export function activate(context: vscode.ExtensionContext) {
 
 
     const parseLine = (line: string): DirectoryListingData => {
+        if (line.endsWith("\r")){
+            line = line.slice(0, -1);
+        }
         if (line.indexOf(METADATA_BEGIN_SYMBOL) !== -1){
             // remove metadata
             let startIndex = line.indexOf(METADATA_BEGIN_SYMBOL);
             let endIndex = line.indexOf(METADATA_END_SYMBOL);
             line = line.slice(0, startIndex) + line.slice(endIndex + METADATA_END_SYMBOL.length);
         }
-        if (line.startsWith(":") || line.startsWith("'")){
+        if (line == '/ ..'){
+            return {
+                identifier: "",
+                isDir: true,
+                name: "..",
+                isNew: false,
+                isCommand: false
+            };
+        }
+        if (line.startsWith(":") || line.startsWith("'") || line.startsWith("/")){
             return {
                 identifier: "",
                 isDir: false,
@@ -465,7 +477,7 @@ export function activate(context: vscode.ExtensionContext) {
                 isCommand: true
             };
         }
-        if (((line.length > 1 && line[1] === ' ') || (line.trim().length === 1)) && !(line[0] === '-' || line[0] === '/')){
+        if (((line.length > 1 && line[1] === ' ') || (line.trim().length === 1)) && !(line[0] === '-')){
             return {
                 identifier: "",
                 isDir: false,
@@ -476,9 +488,9 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         // find the first index of '-' or '/'
-        let regexp = new RegExp('[-/]');
-        let index = line.search(regexp);
-        let hasIdentifier = index !== 0;
+        let regex = /[-/]/;
+        let index = line.search(regex);
+        let hasIdentifier = index > 0;
 
         let parts = line.split(' ');
         if (hasIdentifier){
@@ -494,11 +506,12 @@ export function activate(context: vscode.ExtensionContext) {
             };
         }
         else{
-            let typeString = parts[0];
-            let name = parts.slice(1).join(' ').trim();
+            // let typeString = parts[0];
+            let name = line.slice(1);
+            let isDir = line.endsWith('/');
             return {
                 identifier: '',
-                isDir: typeString === '/',
+                isDir: isDir,
                 name: name,
                 isNew: !name.startsWith('.'),
                 isCommand: false
@@ -1051,6 +1064,10 @@ export function activate(context: vscode.ExtensionContext) {
                     if (name.startsWith(":")){
                         let command = name.slice(1).trim();
 
+                    }
+                    else if (name.startsWith("/")){
+                        let cmdArg = name.slice(1);
+                        doc.setFilterPattern(cmdArg);
                     }
                     else{
                         let cmd = name[0];
