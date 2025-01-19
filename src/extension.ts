@@ -888,8 +888,11 @@ export function activate(context: vscode.ExtensionContext) {
             content += `${PREVDIR_LINE}\n`;
             for (let file of files) {
 
-                if (this.filterString && !file[0].includes(this.filterString)) {
-                    continue;
+                // we don't want to filter the content of previews
+                if (!isPreview){
+                    if (this.filterString && !file[0].includes(this.filterString)) {
+                        continue;
+                    }
                 }
 
                 let isDir = file[1] === vscode.FileType.Directory;
@@ -1467,7 +1470,7 @@ export function activate(context: vscode.ExtensionContext) {
                 let previewExtensions = config.get<string[]>('previewExtensions') ?? [];
                 let lineIndex = event.selections[0]?.active.line;
                 if (lineIndex !== undefined) {
-                    let lineText = doc.doc.getText(doc.doc.lineAt(lineIndex).range);
+                    let lineText = doc.doc.getText(doc.doc.lineAt(lineIndex).range)
                     let { isDir, name } = parseLine(lineText);
                     if (!isDir && name !== '..') {
                         let ext = path.extname(name);
