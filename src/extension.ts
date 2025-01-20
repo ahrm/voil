@@ -1,6 +1,5 @@
 // c-o does not work well with preview document
 // preview mode can not launch if the current file does not exist
-// when creating a directory with content we don't focus on the directory
 
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -1077,7 +1076,12 @@ export function activate(context: vscode.ExtensionContext) {
         if (modified){
             await updateDocContentToCurrentDir(doc);
             if (newNames.length > 0){
-                focusOnFileWithName(doc, newNames[0]);
+                let nameParts = getPathParts(newNames[0]);
+                let firstPathPart = getPathParts(newNames[0])[0];
+                if (nameParts.length > 1){
+                    firstPathPart = firstPathPart + '/';
+                }
+                focusOnFileWithName(doc, firstPathPart);
             }
         }
 
