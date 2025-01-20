@@ -2,16 +2,12 @@
 // preview mode can not launch if the current file does not exist
 // when creating a directory with content we don't focus on the directory
 
-import { copyFileSync, rename } from 'fs';
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getActiveResourcesInfo, listenerCount } from 'process';
-import { time } from 'console';
-import { platform } from 'os';
 
 const IDENTIFIER_SIZE = 7;
 const METADATA_BEGIN_SYMBOL = "/[";
-const METADATA_END_SYMBOL = "]/"
+const METADATA_END_SYMBOL = "]/";
 const PREVDIR_LINE = "../";
 const ILLEGAL_FILE_NAMES_ON_WINDOWS = [
     "System Volume Information",
@@ -918,7 +914,7 @@ export function activate(context: vscode.ExtensionContext) {
         for (let [identifier, items] of newIdentifiers){
             let originalPath = getPathForIdentifier(identifier);
             let originalParentPath = getPathParts(originalPath).slice(0, -1).join('/');
-            let isCurrentDirTheSameAsOriginal = doc.currentDir?.path === originalParentPath;
+            let isCurrentDirTheSameAsOriginal = doc.showRecursive || (doc.currentDir?.path === originalParentPath);
             let newItems: DirectoryListingData[] = [];
             let originalExists = false;
 
