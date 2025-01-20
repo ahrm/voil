@@ -24,6 +24,7 @@ const getPathParts = (path: string | undefined) => {
     return path.split('/').filter((part, index) => (index === 0) || (part.length > 0));
 }
 
+
 class DirectoryListingData {
     identifier: string;
     isDir: boolean;
@@ -362,6 +363,15 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     const debugCommand = vscode.commands.registerCommand('vsoil.debug', async () => {
+    });
+
+    const setFilterCommand = vscode.commands.registerCommand('vsoil.setFilter', async () => {
+        let filterString = await vscode.window.showInputBox({ prompt: 'Enter filter pattern' });
+        let vsoil = await getVsoilDocForActiveEditor();
+        if (vsoil && (filterString !== undefined)){
+            vsoil.setFilterPattern(filterString);
+            await updateDocContentToCurrentDir(vsoil);
+        }
     });
 
     const saveLayoutCommand = vscode.commands.registerCommand('vsoil.saveLayout', () => {

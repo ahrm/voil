@@ -57,6 +57,10 @@
         "title": "vsoil: Go to parent directory"
       },
       {
+        "command": "vsoil.setFilter",
+        "title": "vsoil: Filter files"
+      },
+      {
         "command": "vsoil.debug",
         "title": "vsoil: debug"
       },
