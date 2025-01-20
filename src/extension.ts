@@ -30,7 +30,6 @@ class DirectoryListingData {
     isDir: boolean;
     name: string;
     isNew: boolean;
-    isCommand: boolean = false;
 
     constructor(identifier: string, isDir: boolean, name: string, isNew: boolean=false) {
         this.identifier = identifier;
@@ -483,8 +482,7 @@ export function activate(context: vscode.ExtensionContext) {
                 identifier: "",
                 isDir: true,
                 name: "..",
-                isNew: false,
-                isCommand: false
+                isNew: false
             };
         }
 
@@ -502,8 +500,7 @@ export function activate(context: vscode.ExtensionContext) {
                 identifier: identifier,
                 isDir: typeString === '/',
                 name: name,
-                isNew: false,
-                isCommand: false
+                isNew: false
             };
         }
         else{
@@ -513,8 +510,7 @@ export function activate(context: vscode.ExtensionContext) {
                 identifier: '',
                 isDir: isDir,
                 name: name,
-                isNew: !name.startsWith('.'),
-                isCommand: false
+                isNew: !name.startsWith('.')
             };
 
         }
@@ -542,9 +538,9 @@ export function activate(context: vscode.ExtensionContext) {
             if (line.trim() === PREVDIR_LINE){
                 continue;
             }
-            let { identifier, isDir, name, isNew, isCommand } = parseLine(line);
+            let { identifier, isDir, name, isNew } = parseLine(line);
             let oldList: DirectoryListingData[] = res.get(identifier) || [];
-            oldList.push({ identifier, isDir, name, isNew, isCommand });
+            oldList.push({ identifier, isDir, name, isNew });
             res.set(identifier, oldList);
         }
         return res;
@@ -1062,66 +1058,18 @@ export function activate(context: vscode.ExtensionContext) {
                 continue;
             }
 
-            let { identifier, isDir, name, isNew, isCommand } = parseLine(line);
+            let { identifier, isDir, name, isNew } = parseLine(line);
             if (isNew) {
-
-                if (isCommand){
+                let fullPath = vscode.Uri.joinPath(doc.currentDir!, name + "/");
+                if (isDir) {
+                    await vscode.workspace.fs.createDirectory(fullPath);
+                    newNames.push(name);
                     modified = true;
-
-                    if (name.startsWith(":")){
-                        let command = name.slice(1).trim();
-
-                    }
-                    else if (name.startsWith("/")){
-                        let cmdArg = name.slice(1);
-                        doc.setFilterPattern(cmdArg);
-                    }
-                    else{
-                        let cmd = name[0];
-                        let cmdArg = name.slice(2).trim();
-                        if (cmd === 'f'){
-                            doc.setFilterPattern(cmdArg);
-                        }
-                        if (cmd === 's' || cmd === 'S'){
-
-                            if (cmd === 'S'){
-                                doc.isAscending = false;
-                            }
-                            else{
-                                doc.isAscending = true;
-                            }
-
-                            if (cmdArg === ''){
-                                doc.sortBy = SortBy.Name;
-                            }
-                            if (cmdArg === 'd'){
-                                doc.sortBy = SortBy.CreationDate;
-                            }
-                            if (cmdArg === 't'){
-                                doc.sortBy = SortBy.FileType;
-                            }
-                            if (cmdArg === 's'){
-                                doc.sortBy = SortBy.Size;
-                            }
-                        }
-                        if (cmd === 'o'){
-                            vscode.env.openExternal(vscode.Uri.file(doc.currentDir.path));
-                        }
-
-                    }
                 }
-                else{
-                    let fullPath = vscode.Uri.joinPath(doc.currentDir!, name + "/");
-                    if (isDir) {
-                        await vscode.workspace.fs.createDirectory(fullPath);
-                        newNames.push(name);
-                        modified = true;
-                    }
-                    else {
-                        await vscode.workspace.fs.writeFile(fullPath, new Uint8Array());
-                        newNames.push(name);
-                        modified = true;
-                    }
+                else {
+                    await vscode.workspace.fs.writeFile(fullPath, new Uint8Array());
+                    newNames.push(name);
+                    modified = true;
                 }
             }
         }
