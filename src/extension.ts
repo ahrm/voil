@@ -1,5 +1,6 @@
 // c-o does not work well with preview document
 // preview mode can not launch if the current file does not exist
+// when creating a directory with content we don't focus on the directory
 
 import { copyFileSync, rename } from 'fs';
 import * as vscode from 'vscode';
@@ -26,6 +27,7 @@ const getPathParts = (path: string | undefined) => {
     if (path === undefined) return [];
     return path.split('/').filter((part, index) => (index === 0) || (part.length > 0));
 }
+
 class DirectoryListingData {
     identifier: string;
     isDir: boolean;
@@ -479,33 +481,15 @@ export function activate(context: vscode.ExtensionContext) {
                 isCommand: false
             };
         }
-        if (line.startsWith(":") || line.startsWith("'") || line.startsWith("/")){
-            return {
-                identifier: "",
-                isDir: false,
-                name: line,
-                isNew: true,
-                isCommand: true
-            };
-        }
-        if (((line.length > 1 && line[1] === ' ') || (line.trim().length === 1)) && !(line[0] === '-')){
-            return {
-                identifier: "",
-                isDir: false,
-                name: line,
-                isNew: true,
-                isCommand: true
-            }
-        }
 
-        // find the first index of '-' or '/'
-        let regex = /[-/]/;
+        // line begins with slash folllowed by identifier
+        let regex = /^\/[A-Za-z]{7}/;
         let index = line.search(regex);
-        let hasIdentifier = index > 0;
+        let hasIdentifier = index >= 0;
 
         let parts = line.split(' ');
         if (hasIdentifier){
-            let identifier = parts[0];
+            let identifier = parts[0].slice(1);
             let typeString = parts[1];
             let name = parts.slice(2).join(' ').trim();
             return {
@@ -517,8 +501,7 @@ export function activate(context: vscode.ExtensionContext) {
             };
         }
         else{
-            // let typeString = parts[0];
-            let name = line.slice(1);
+            let name = line;
             let isDir = line.endsWith('/');
             return {
                 identifier: '',
@@ -914,7 +897,7 @@ export function activate(context: vscode.ExtensionContext) {
                 let dirPostfix = isDir ? '/' : '';
                 // pad line content to maxMetadataSize
                 lineContent = lineContent.padEnd(maxMetadataSize, ' ');
-                content += `${lineContent}${file[0]}${dirPostfix}\n`;
+                content += `/${lineContent}${file[0]}${dirPostfix}\n`;
             }
             return content;
         }
@@ -1436,8 +1419,8 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    const LISTING_PREFIX_SIZE = IDENTIFIER_SIZE + 3; 
-    const LISTING_REGEX = new RegExp('^[a-zA-Z]{7} [-/] ');
+    const LISTING_PREFIX_SIZE = IDENTIFIER_SIZE + 4; 
+    const LISTING_REGEX = new RegExp('^\\/[a-zA-Z]{7} [-/] ');
 
     context.subscriptions.push(
         vscode.window.onDidChangeTextEditorSelection(async (event) => {
