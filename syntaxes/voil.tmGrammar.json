@@ -1,29 +1,29 @@
 {
-  "scopeName": "source.vsoil",
+  "scopeName": "source.voil",
   "patterns": [
   {
     "match": "^\\/[a-zA-z]{7} - .*\\.txt$",
-    "name": "vsoil.filetype.txt"
+    "name": "voil.filetype.txt"
   },
   {
     "match": "^\\/[a-zA-z]{7} - .*\\.(c|cpp|h|hpp|cc|cxx|hh|hxx|py|sh|bat|ts|js|java|rb|go|html|css)$",
-    "name": "vsoil.filetype.code"
+    "name": "voil.filetype.code"
   },
   {
     "match": "^\\/[a-zA-z]{7} - .*$",
-    "name": "vsoil.filetype.generic"
+    "name": "voil.filetype.generic"
   },
   {
     "match": "^\\/[a-zA-z]{7} / .*$",
-    "name": "vsoil.dirtype.dir"
+    "name": "voil.dirtype.dir"
   },
   {
     "match": "\\.\\./",
-    "name": "vsoil.dirtype.dir"
+    "name": "voil.dirtype.dir"
   },
   {
     "match": "^[\\s\\S]*$",
-    "name": "vsoil.unlisted"
+    "name": "voil.unlisted"
   }
 ],
   "repository": {

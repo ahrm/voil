@@ -1,6 +1,6 @@
 {
-  "name": "vsoil",
-  "displayName": "vsoil",
+  "name": "voil",
+  "displayName": "voil",
   "description": "",
   "version": "0.0.1",
   "engines": {
@@ -14,99 +14,99 @@
   "contributes": {
     "languages": [
       {
-        "id": "vsoil",
+        "id": "voil",
         "extensions": [
-          ".vsoil"
+          ".voil"
         ]
       }
     ],
     "grammars": [
       {
-        "language": "vsoil",
-        "scopeName": "source.vsoil",
-        "path": "./syntaxes/vsoil.tmGrammar.json"
+        "language": "voil",
+        "scopeName": "source.voil",
+        "path": "./syntaxes/voil.tmGrammar.json"
       }
     ],
     "commands": [
       {
-        "command": "vsoil.openPanelWithPreview",
-        "title": "vsoil: Open vsoil panel with preview at workspace root"
+        "command": "voil.openPanelWithPreview",
+        "title": "voil: Open voil panel with preview at workspace root"
       },
       {
-        "command": "vsoil.openPanel",
-        "title": "vsoil: Open vsoil panel at workspace root"
+        "command": "voil.openPanel",
+        "title": "voil: Open voil panel at workspace root"
       },
       {
-        "command": "vsoil.openPanelWithPreviewCurrentDir",
-        "title": "vsoil: Open vsoil panel with preview at current directory"
+        "command": "voil.openPanelWithPreviewCurrentDir",
+        "title": "voil: Open voil panel with preview at current directory"
       },
       {
-        "command": "vsoil.openPanelCurrentDir",
-        "title": "vsoil: Open vsoil panel at current directory"
+        "command": "voil.openPanelCurrentDir",
+        "title": "voil: Open voil panel at current directory"
       },
       {
-        "command": "vsoil.togglePreview",
-        "title": "vsoil: Toggle the vsoil preview window"
+        "command": "voil.togglePreview",
+        "title": "voil: Toggle the voil preview window"
       },
       {
-        "command": "vsoil.toggleRecursive",
-        "title": "vsoil: Toggle recursive listing"
+        "command": "voil.toggleRecursive",
+        "title": "voil: Toggle recursive listing"
       },
       {
-        "command": "vsoil.gotoParentDir",
-        "title": "vsoil: Go to parent directory"
+        "command": "voil.gotoParentDir",
+        "title": "voil: Go to parent directory"
       },
       {
-        "command": "vsoil.setFilter",
-        "title": "vsoil: Filter files"
+        "command": "voil.setFilter",
+        "title": "voil: Filter files"
       },
       {
-        "command": "vsoil.debug",
-        "title": "vsoil: debug"
+        "command": "voil.debug",
+        "title": "voil: debug"
       },
       {
-        "command": "vsoil.toggleFileSize",
-        "title": "vsoil: toggle file size"
+        "command": "voil.toggleFileSize",
+        "title": "voil: toggle file size"
       },
       {
-        "command": "vsoil.toggleCreationDate",
-        "title": "vsoil: toggle file creation date"
+        "command": "voil.toggleCreationDate",
+        "title": "voil: toggle file creation date"
       },
       {
-        "command": "vsoil.sortByFileName",
-        "title": "vsoil: sort by file name"
+        "command": "voil.sortByFileName",
+        "title": "voil: sort by file name"
       },
       {
-        "command": "vsoil.sortByFileType",
-        "title": "vsoil: sort by file type"
+        "command": "voil.sortByFileType",
+        "title": "voil: sort by file type"
       },
       {
-        "command": "vsoil.sortByFileCreationTime",
-        "title": "vsoil: sort by file creation time"
+        "command": "voil.sortByFileCreationTime",
+        "title": "voil: sort by file creation time"
       },
       {
-        "command": "vsoil.sortByFileSize",
-        "title": "vsoil: sort by file size"
+        "command": "voil.sortByFileSize",
+        "title": "voil: sort by file size"
       },
       {
-        "command": "vsoil.toggleSortOrder",
-        "title": "vsoil: toggle sort order"
+        "command": "voil.toggleSortOrder",
+        "title": "voil: toggle sort order"
       },
       {
-        "command": "vsoil.saveLayout",
-        "title": "vsoil: save layout"
+        "command": "voil.saveLayout",
+        "title": "voil: save layout"
       },
       {
-        "command": "vsoil.restoreLayout",
-        "title": "vsoil: restore layout"
+        "command": "voil.restoreLayout",
+        "title": "voil: restore layout"
       },
       {
-        "command": "vsoil.runShellCommandOnSelection",
-        "title": "vsoil: run shell command on selected items"
+        "command": "voil.runShellCommandOnSelection",
+        "title": "voil: run shell command on selected items"
       },
       {
-        "command": "vsoil.runShellCommandWithIdOnSelection",
-        "title": "vsoil: run shell command with the given id on selected items",
+        "command": "voil.runShellCommandWithIdOnSelection",
+        "title": "voil: run shell command with the given id on selected items",
         "arguments": [
           {
             "name": "id",
@@ -115,46 +115,46 @@
         ]
       },
       {
-        "command": "vsoil.openCurrentDirectory",
-        "title": "vsoil: Open the current directory in the default file explorer"
+        "command": "voil.openCurrentDirectory",
+        "title": "voil: Open the current directory in the default file explorer"
       }
     ],
     "keybindings": [
       {
-        "command": "vsoil.handleSave",
+        "command": "voil.handleSave",
         "key": "ctrl+s",
-        "when": "editorTextFocus && vsoilDoc"
+        "when": "editorTextFocus && voilDoc"
       }
     ],
     "configurationDefaults": {
       "editor.tokenColorCustomizations": {
           "textMateRules": [
             {
-              "scope": "vsoil.filetype.txt",
+              "scope": "voil.filetype.txt",
               "settings": {
                 "foreground": "#cccccc"
               }
             },
             {
-              "scope": "vsoil.dirtype.dir",
+              "scope": "voil.dirtype.dir",
               "settings": {
                 "foreground": "#3794ff"
               }
             },
             {
-              "scope": "vsoil.filetype.code",
+              "scope": "voil.filetype.code",
               "settings": {
                 "foreground": "#edbbff"
               }
             },
             {
-              "scope": "vsoil.unlisted",
+              "scope": "voil.unlisted",
               "settings": {
                 "foreground": "#666666"
               }
             },
             {
-              "scope": "vsoil.filetype.generic",
+              "scope": "voil.filetype.generic",
               "settings": {
                 "foreground": "#f48771"
               }
@@ -165,24 +165,24 @@
     },
     "configuration": {
       "type": "object",
-      "title": "VSOIL",
+      "title": "VOIL",
       "properties": {
-        "vsoil.previewExtensions": {
+        "voil.previewExtensions": {
           "type": "array",
           "default": [".txt", ".sh", ".bat", ".py", ".c", ".cpp", ".ts", ".js", ".java", ".rb", ".go"],
-          "description": "File extensions that vsoil will preview automatically."
+          "description": "File extensions that voil will preview automatically."
         },
-        "vsoil.previewAutoOpen": {
+        "voil.previewAutoOpen": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically open the preview window when the vsoil window is opened."
+          "description": "Automatically open the preview window when the voil window is opened."
         },
-        "vsoil.allowFocusOnIdentifier": {
+        "voil.allowFocusOnIdentifier": {
           "type": "boolean",
           "default": false,
-          "description": "Allow focusing the cursor on the identifier in the vsoil window."
+          "description": "Allow focusing the cursor on the identifier in the voil window."
         },
-        "vsoil.customShellCommands": {
+        "voil.customShellCommands": {
           "type": "array",
           "default": [],
           "description": "Custom shell commands that can be run on selected items."

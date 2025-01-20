@@ -23,6 +23,10 @@ const getPathParts = (path: string | undefined) => {
     return path.split('/').filter((part, index) => (index === 0) || (part.length > 0));
 }
 
+const isSamePath =(path1: string, path2: string) => {
+    return path.relative(path1, path2) === '';
+}
+
 
 class DirectoryListingData {
     identifier: string;
@@ -173,7 +177,7 @@ let filterStatusBarItem: vscode.StatusBarItem;
 
 export function activate(context: vscode.ExtensionContext) {
 
-    function updateStatusbar(voil: VsoilDoc) {
+    function updateStatusbar(voil: VoilDoc) {
         if (voil.filterString.length > 0) {
             filterStatusBarItem.text = `$(search) filter: ${voil.filterString}`;
             filterStatusBarItem.show();
@@ -184,15 +188,15 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     // var currentDir = vscode.workspace.workspaceFolders?.[0].uri;
-    var vsoilPanel: VsoilDoc | undefined = undefined;
-    var vsoilDocs: VsoilDoc[] = [];
+    var voilPanel: VoilDoc | undefined = undefined;
+    var voilDocs: VoilDoc[] = [];
     var previewDoc: vscode.TextDocument | undefined = undefined;
 
     var pathToIdentifierMap: Map<string, string> = new Map();
     var identifierToPathMap: Map<string, string> = new Map();
     var cutIdentifiers = new Set<string>();
 
-    let config = vscode.workspace.getConfiguration('vsoil');
+    let config = vscode.workspace.getConfiguration('voil');
 
     // let previewEnabled = false;
     let previewEnabled = config.get<boolean>('previewAutoOpen') ?? false;
@@ -202,7 +206,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // update the settings when they change
     vscode.workspace.onDidChangeConfiguration((e) => {
-        config = vscode.workspace.getConfiguration('vsoil');
+        config = vscode.workspace.getConfiguration('voil');
         previewEnabled = config.get<boolean>('previewAutoOpen') ?? false;
         allowFocusOnIdentifier = config.get<boolean>('allowFocusOnIdentifier') ?? false;
         customShellCommands_ = config.get<CustomShellCommand[]>('customShellCommands');
@@ -210,7 +214,7 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
 
-    const togglePreview = vscode.commands.registerCommand('vsoil.togglePreview', () => {
+    const togglePreview = vscode.commands.registerCommand('voil.togglePreview', () => {
         previewEnabled = !previewEnabled;
     });
 
@@ -252,17 +256,17 @@ export function activate(context: vscode.ExtensionContext) {
         }
     };
 
-    const closeNonVisibleVsoilDocs = async () => {
+    const closeNonVisibleVoilDocs = async () => {
         let docsToClose = [];
-        if (vsoilPanel){
-            let isVisible = vscode.window.visibleTextEditors.some((editor) => editor.document === vsoilPanel?.doc);
+        if (voilPanel){
+            let isVisible = vscode.window.visibleTextEditors.some((editor) => editor.document === voilPanel?.doc);
             if (!isVisible){
-                docsToClose.push(vsoilPanel);
-                vsoilPanel = undefined;
+                docsToClose.push(voilPanel);
+                voilPanel = undefined;
             }
         }
         let docsToKeep = [];
-        for (let doc of vsoilDocs){
+        for (let doc of voilDocs){
             let isVisible = vscode.window.visibleTextEditors.some((editor) => editor.document === doc.doc);
             if (isVisible){
                 docsToKeep.push(doc);
@@ -271,7 +275,7 @@ export function activate(context: vscode.ExtensionContext) {
                 docsToClose.push(doc);
             }
         }
-        vsoilDocs = docsToKeep;
+        voilDocs = docsToKeep;
         for (let doc of docsToClose){
             doc.handleClose();
             await vscode.window.showTextDocument(doc.doc).then(async () => {
@@ -280,120 +284,120 @@ export function activate(context: vscode.ExtensionContext) {
         }
     };
 
-    const runShellCommandOnSelectionCommand = vscode.commands.registerCommand('vsoil.runShellCommandOnSelection', async () => {
+    const runShellCommandOnSelectionCommand = vscode.commands.registerCommand('voil.runShellCommandOnSelection', async () => {
         let shellCommand = await vscode.window.showInputBox({ prompt: 'Enter shell command to run on selected items' });
         if (shellCommand){
-            let vsoil = await getVsoilDocForActiveEditor();
-            if (vsoil !== undefined) {
-                vsoil.runShellCommandOnSelectedItems(shellCommand)
+            let voil = await getVoilDocForActiveEditor();
+            if (voil !== undefined) {
+                voil.runShellCommandOnSelectedItems(shellCommand)
             }
         }
     });
 
-    const runShellCommandWithIdOnSelectionCommand = vscode.commands.registerCommand('vsoil.runShellCommandWithIdOnSelection', async (args) => {
+    const runShellCommandWithIdOnSelectionCommand = vscode.commands.registerCommand('voil.runShellCommandWithIdOnSelection', async (args) => {
         let cmdId = args.id;
         let cmd = customShellCommands?.find((cmd) => cmd.id === cmdId);
-        let vsoil = await getVsoilDocForActiveEditor();
-        if (cmd && vsoil){
+        let voil = await getVoilDocForActiveEditor();
+        if (cmd && voil){
             let cmdWithInputs = await cmd.getInputs();
             if (cmdWithInputs){
-                vsoil.runShellCommandOnSelectedItems(cmdWithInputs);
+                voil.runShellCommandOnSelectedItems(cmdWithInputs);
             }
         }
     });
 
-    const toggleFileSizeCommand = vscode.commands.registerCommand('vsoil.toggleFileSize', async () => {
-        let vsoil = await getVsoilDocForActiveEditor();
-        if (vsoil !== undefined){
-            vsoil.toggleFileSize();
+    const toggleFileSizeCommand = vscode.commands.registerCommand('voil.toggleFileSize', async () => {
+        let voil = await getVoilDocForActiveEditor();
+        if (voil !== undefined){
+            voil.toggleFileSize();
         }
     });
 
-    let toggleCreationDateCommand = vscode.commands.registerCommand('vsoil.toggleCreationDate', async () => {
-        let vsoil = await getVsoilDocForActiveEditor();
-        if (vsoil !== undefined){
-            vsoil.toggleCreationDate();
+    let toggleCreationDateCommand = vscode.commands.registerCommand('voil.toggleCreationDate', async () => {
+        let voil = await getVoilDocForActiveEditor();
+        if (voil !== undefined){
+            voil.toggleCreationDate();
         }
     });
 
-    let sortByFileNameCommand = vscode.commands.registerCommand('vsoil.sortByFileName', async () => {
-        let vsoil = await getVsoilDocForActiveEditor();
-        if (vsoil !== undefined){
-            vsoil.sortByName();
+    let sortByFileNameCommand = vscode.commands.registerCommand('voil.sortByFileName', async () => {
+        let voil = await getVoilDocForActiveEditor();
+        if (voil !== undefined){
+            voil.sortByName();
         }
     });
 
-    let sortByFileTypeCommand = vscode.commands.registerCommand('vsoil.sortByFileType', async () => {
-        let vsoil = await getVsoilDocForActiveEditor();
-        if (vsoil !== undefined){
-            vsoil.sortByFileType();
+    let sortByFileTypeCommand = vscode.commands.registerCommand('voil.sortByFileType', async () => {
+        let voil = await getVoilDocForActiveEditor();
+        if (voil !== undefined){
+            voil.sortByFileType();
         }
     });
 
-    let sortByCreationTimeCommand = vscode.commands.registerCommand('vsoil.sortByFileCreationTime', async () => {
-        let vsoil = await getVsoilDocForActiveEditor();
-        if (vsoil !== undefined){
-            vsoil.sortByCreationTime();
+    let sortByCreationTimeCommand = vscode.commands.registerCommand('voil.sortByFileCreationTime', async () => {
+        let voil = await getVoilDocForActiveEditor();
+        if (voil !== undefined){
+            voil.sortByCreationTime();
         }
     });
 
-    let sortByFileSizeCommand = vscode.commands.registerCommand('vsoil.sortByFileSize', async () => {
-        let vsoil = await getVsoilDocForActiveEditor();
-        if (vsoil !== undefined){
-            vsoil.sortBySize();
+    let sortByFileSizeCommand = vscode.commands.registerCommand('voil.sortByFileSize', async () => {
+        let voil = await getVoilDocForActiveEditor();
+        if (voil !== undefined){
+            voil.sortBySize();
         }
     });
 
-    let toggleSortOrderCommand = vscode.commands.registerCommand('vsoil.toggleSortOrder', async () => {
-        let vsoil = await getVsoilDocForActiveEditor();
-        if (vsoil !== undefined){
-            vsoil.toggleSortOrder();
+    let toggleSortOrderCommand = vscode.commands.registerCommand('voil.toggleSortOrder', async () => {
+        let voil = await getVoilDocForActiveEditor();
+        if (voil !== undefined){
+            voil.toggleSortOrder();
         }
     });
 
 
-    const toggleRecursiveCommand = vscode.commands.registerCommand('vsoil.toggleRecursive', async () => {
-        let vsoil = await getVsoilDocForActiveEditor();
-        if (vsoil){
-            vsoil.showRecursive = !vsoil.showRecursive;
-            await updateDocContentToCurrentDir(vsoil);
+    const toggleRecursiveCommand = vscode.commands.registerCommand('voil.toggleRecursive', async () => {
+        let voil = await getVoilDocForActiveEditor();
+        if (voil){
+            voil.showRecursive = !voil.showRecursive;
+            await updateDocContentToCurrentDir(voil);
         }
     });
 
-    const debugCommand = vscode.commands.registerCommand('vsoil.debug', async () => {
+    const debugCommand = vscode.commands.registerCommand('voil.debug', async () => {
     });
 
-    const setFilterCommand = vscode.commands.registerCommand('vsoil.setFilter', async () => {
+    const setFilterCommand = vscode.commands.registerCommand('voil.setFilter', async () => {
         let filterString = await vscode.window.showInputBox({ prompt: 'Enter filter pattern' });
-        let vsoil = await getVsoilDocForActiveEditor();
-        if (vsoil && (filterString !== undefined)){
-            vsoil.setFilterPattern(filterString);
-            await updateDocContentToCurrentDir(vsoil);
+        let voil = await getVoilDocForActiveEditor();
+        if (voil && (filterString !== undefined)){
+            voil.setFilterPattern(filterString);
+            await updateDocContentToCurrentDir(voil);
         }
     });
 
-    const saveLayoutCommand = vscode.commands.registerCommand('vsoil.saveLayout', () => {
+    const saveLayoutCommand = vscode.commands.registerCommand('voil.saveLayout', () => {
         saveCurrentEditorLayout();
     });
 
-    const restoreLayoutCommand = vscode.commands.registerCommand('vsoil.restoreLayout', () => {
+    const restoreLayoutCommand = vscode.commands.registerCommand('voil.restoreLayout', () => {
         restoreEditorLayout();
     });
 
-    const gotoParentDirCommand = vscode.commands.registerCommand('vsoil.gotoParentDir', async () => {
-        let vsoil = await getVsoilDocForActiveEditor();
-        if (vsoil){
-            let parentDir = vscode.Uri.joinPath(vsoil.currentDir, '..');
-            let currentDirectoryName = path.basename(vsoil.currentDir.path);
-            vsoil.currentDir = parentDir;
-            await updateDocContentToCurrentDir(vsoil);
-            await vsoil.focusOnLineWithContent(currentDirectoryName + "/");
+    const gotoParentDirCommand = vscode.commands.registerCommand('voil.gotoParentDir', async () => {
+        let voil = await getVoilDocForActiveEditor();
+        if (voil){
+            let parentDir = vscode.Uri.joinPath(voil.currentDir, '..');
+            let currentDirectoryName = path.basename(voil.currentDir.path);
+            voil.currentDir = parentDir;
+            await updateDocContentToCurrentDir(voil);
+            await voil.focusOnLineWithContent(currentDirectoryName + "/");
         }
     });
     
 
-    const openCurrentDirectory = vscode.commands.registerCommand('vsoil.openCurrentDirectory', async () => {
-        let doc = await getVsoilDocForActiveEditor();
+    const openCurrentDirectory = vscode.commands.registerCommand('voil.openCurrentDirectory', async () => {
+        let doc = await getVoilDocForActiveEditor();
         if (doc) {
             // open the operating system's file explorer in the current directory
             vscode.env.openExternal(vscode.Uri.file(doc.currentDir.path));
@@ -402,26 +406,25 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(togglePreview);
 
-    let getVsoilDoc = async () => {
-        if (vsoilPanel) {
-            return vsoilPanel;
+    let getVoilDoc = async () => {
+        if (voilPanel) {
+            return voilPanel;
         }
-        // vsoilDoc = await vscode.workspace.openTextDocument({ content: '' });
-        let doc = await vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:Vsoil.vsoil'));
-        let res = new VsoilDoc(doc, previewEnabled, vscode.workspace.workspaceFolders?.[0].uri!);
-        vsoilPanel = res;
+        let doc = await vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:Voil.voil'));
+        let res = new VoilDoc(doc, previewEnabled, vscode.workspace.workspaceFolders?.[0].uri!);
+        voilPanel = res;
         return res;
     };
 
-    let newVsoilDoc = async () => {
-        let nonVisibleVsoilDocs = vsoilDocs.filter((doc) => !vscode.window.visibleTextEditors.some((editor) => editor.document === doc.doc));
-        if (nonVisibleVsoilDocs.length > 0){
-            return nonVisibleVsoilDocs[0];
+    let newVoilDoc = async () => {
+        let nonVisibleVoilDocs = voilDocs.filter((doc) => !vscode.window.visibleTextEditors.some((editor) => editor.document === doc.doc));
+        if (nonVisibleVoilDocs.length > 0){
+            return nonVisibleVoilDocs[0];
         }
 
-        let doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(`untitled:Vsoil-doc${vsoilDocs.length}.vsoil`));
-        let res = new VsoilDoc(doc, false, vscode.workspace.workspaceFolders?.[0].uri!);
-        vsoilDocs.push(res);
+        let doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(`untitled:Voil-doc${voilDocs.length}.voil`));
+        let res = new VoilDoc(doc, false, vscode.workspace.workspaceFolders?.[0].uri!);
+        voilDocs.push(res);
         return res;
     };
 
@@ -429,7 +432,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (previewDoc) {
             return previewDoc;
         }
-        previewDoc = await vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:Vsoil:preview.vsoil'));
+        previewDoc = await vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:Voil:preview.voil'));
         return previewDoc;
     };
 
@@ -516,10 +519,10 @@ export function activate(context: vscode.ExtensionContext) {
     };
 
 
-    const focusOnFileWithName = async (vsoil: VsoilDoc, name: string) => {
-        let lineIndex = vsoil.doc.getText().split('\n').findIndex((line) => line.trimEnd().endsWith(name));
+    const focusOnFileWithName = async (voil: VoilDoc, name: string) => {
+        let lineIndex = voil.doc.getText().split('\n').findIndex((line) => line.trimEnd().endsWith(name));
         if (lineIndex !== -1) {
-            let line = vsoil.doc.lineAt(lineIndex);
+            let line = voil.doc.lineAt(lineIndex);
             let selection = new vscode.Selection(line.range.start, line.range.start);
             if (vscode.window.activeTextEditor) {
                 vscode.window.activeTextEditor.selection = selection;
@@ -552,7 +555,7 @@ export function activate(context: vscode.ExtensionContext) {
         CreationDate
     };
 
-    class VsoilDoc {
+    class VoilDoc {
         doc: vscode.TextDocument;
         hasPreview: boolean;
         currentDirectory: vscode.Uri;
@@ -904,8 +907,8 @@ export function activate(context: vscode.ExtensionContext) {
         }
     }
 
-    const handleSave = vscode.commands.registerCommand('vsoil.handleSave', async () => {
-        let doc = await getVsoilDocForActiveEditor();
+    const handleSave = vscode.commands.registerCommand('voil.handleSave', async () => {
+        let doc = await getVoilDocForActiveEditor();
         if (!doc) return;
         let originalContent = await doc.getContentForPath(doc.currentDir!);
         var originalIdentifiers: Map<string, DirectoryListingData[]> = getIdentifiersFromContent(originalContent);
@@ -919,7 +922,8 @@ export function activate(context: vscode.ExtensionContext) {
         for (let [identifier, items] of newIdentifiers){
             let originalPath = getPathForIdentifier(identifier);
             let originalParentPath = getPathParts(originalPath).slice(0, -1).join('/');
-            let isCurrentDirTheSameAsOriginal = doc.showRecursive || (doc.currentDir?.path === originalParentPath);
+            // let isCurrentDirTheSameAsOriginal = doc.showRecursive || (doc.currentDir?.path === originalParentPath);
+            let isCurrentDirTheSameAsOriginal = doc.showRecursive || isSamePath(doc.currentDir?.path, originalParentPath);
             let newItems: DirectoryListingData[] = [];
             let originalExists = false;
 
@@ -1044,7 +1048,7 @@ export function activate(context: vscode.ExtensionContext) {
             else{
                 // if the user chose "No", then we update the contents of the documents because the user might have made some changes 
                 // for example, if the user has deleted some files from a view and then chose "No", we should restore the view to its original state
-                for (let doc of vsoilDocs){
+                for (let doc of voilDocs){
                     await updateDocContentToCurrentDir(doc);
                 }
             }
@@ -1092,8 +1096,8 @@ export function activate(context: vscode.ExtensionContext) {
         cutIdentifiers.clear();
     });
 
-    const handleEnter = vscode.commands.registerCommand('vsoil.handleEnter', async () => {
-        let doc = await getVsoilDocForActiveEditor();
+    const handleEnter = vscode.commands.registerCommand('voil.handleEnter', async () => {
+        let doc = await getVoilDocForActiveEditor();
         if (!doc) return;
         // let activeEditor = doc.getTextEditor();
         // let currentCursorLineIndex = vscode.window.activeTextEditor?.selection.active.line;
@@ -1188,7 +1192,7 @@ export function activate(context: vscode.ExtensionContext) {
         return cutIds;
     };
 
-    const updateCutIdentifiers = async (doc: VsoilDoc, prevContentOnDisk: string) => {
+    const updateCutIdentifiers = async (doc: VoilDoc, prevContentOnDisk: string) => {
         let prevContentOnFile = doc.doc.getText();
 
         let cutIds = getCutIdentifiersFromFileContents(prevContentOnDisk, prevContentOnFile);
@@ -1197,7 +1201,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
     };
 
-    let updateDocContentToCurrentDir = async (doc: VsoilDoc, prevDirectory: string | undefined = undefined) => {
+    let updateDocContentToCurrentDir = async (doc: VoilDoc, prevDirectory: string | undefined = undefined) => {
 
         let rootUri = doc.currentDir;
         let content = await doc.getContentForPath(rootUri!);
@@ -1234,7 +1238,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     };
 
-    const handleStartVsoil = async (doc: VsoilDoc, initialUri: vscode.Uri, fileToFocus: string | undefined = undefined) => {
+    const handleStartVoil = async (doc: VoilDoc, initialUri: vscode.Uri, fileToFocus: string | undefined = undefined) => {
         // doc.currentDir = vscode.workspace.workspaceFolders?.[0].uri!;
         doc.currentDir = initialUri;
         await updateDocContentToCurrentDir(doc);
@@ -1254,19 +1258,19 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.window.activeTextEditor.selection = selection;
         }
 
-        vscode.commands.executeCommand('setContext', 'vsoilDoc', true);
+        vscode.commands.executeCommand('setContext', 'voilDoc', true);
     };
 
-    const openVsoilDoc = vscode.commands.registerCommand('vsoil.openPanel', async () => {
-        let doc = await newVsoilDoc();
-        await handleStartVsoil(doc, vscode.workspace.workspaceFolders?.[0].uri!);
+    const opeVoilDoc = vscode.commands.registerCommand('voil.openPanel', async () => {
+        let doc = await newVoilDoc();
+        await handleStartVoil(doc, vscode.workspace.workspaceFolders?.[0].uri!);
     });
 
-    const startVsoilCommand = vscode.commands.registerCommand('vsoil.openPanelWithPreview', async () => {
+    const startVoilCommand = vscode.commands.registerCommand('voil.openPanelWithPreview', async () => {
 
         await saveCurrentEditorLayout();
-        let doc = await getVsoilDoc();
-        await handleStartVsoil(doc, vscode.workspace.workspaceFolders?.[0].uri!);
+        let doc = await getVoilDoc();
+        await handleStartVoil(doc, vscode.workspace.workspaceFolders?.[0].uri!);
 
     });
 
@@ -1282,71 +1286,59 @@ export function activate(context: vscode.ExtensionContext) {
         });
     };
 
-    const openVsoilDocCurrentDir = vscode.commands.registerCommand('vsoil.openPanelCurrentDir', async () => {
-        let doc = await newVsoilDoc();
+    const openVoilDocCurrentDir = vscode.commands.registerCommand('voil.openPanelCurrentDir', async () => {
+        let doc = await newVoilDoc();
         let currentDocumentPath = vscode.window.activeTextEditor?.document.uri;
         let parentUri = vscode.workspace.workspaceFolders?.[0].uri!;
         let currentDocumentName = undefined;
         if (currentDocumentPath){
-            if (!currentDocumentPath.toString().endsWith(".vsoil")){
+            if (!currentDocumentPath.toString().endsWith(".voil")){
                 currentDocumentName = path.basename(currentDocumentPath.path);
                 parentUri = vscode.Uri.joinPath(currentDocumentPath!, '..');
             }
         }
 
-        await handleStartVsoil(doc, parentUri, currentDocumentName);
+        await handleStartVoil(doc, parentUri, currentDocumentName);
     });
 
-    const startVsoilCommandCurrentDir = vscode.commands.registerCommand('vsoil.openPanelWithPreviewCurrentDir', async () => {
+    const startVoilCommandCurrentDir = vscode.commands.registerCommand('voil.openPanelWithPreviewCurrentDir', async () => {
 
         await saveCurrentEditorLayout();
         let currentDocumentPath = vscode.window.activeTextEditor?.document.uri;
         let parentUri = vscode.workspace.workspaceFolders?.[0].uri!;
         let currentDocumentName = undefined;
         if (currentDocumentPath){
-            if (!currentDocumentPath.toString().endsWith(".vsoil")){
+            if (!currentDocumentPath.toString().endsWith(".voil")){
                 currentDocumentName = path.basename(currentDocumentPath.path);
                 parentUri = vscode.Uri.joinPath(currentDocumentPath!, '..');
             }
         }
-        let doc = await getVsoilDoc();
-        await handleStartVsoil(doc, parentUri, currentDocumentName);
+        let doc = await getVoilDoc();
+        await handleStartVoil(doc, parentUri, currentDocumentName);
 
     });
 
-    context.subscriptions.push(startVsoilCommand);
-    context.subscriptions.push(openVsoilDoc);
+    // context.subscriptions.push(startVoilCommand);
+    // context.subscriptions.push(openVoilDoc);
 
-    const getVsoilDocForEditor = (activeEditor: vscode.TextEditor | undefined) => {
+    const getVoilDocForEditor = (activeEditor: vscode.TextEditor | undefined) => {
         if (activeEditor) {
-            let doc = vsoilDocs.find((doc) => doc.doc === activeEditor?.document);
+            let doc = voilDocs.find((doc) => doc.doc === activeEditor?.document);
             if (doc) {
                 return doc;
             }
         }
-        if (vsoilPanel){
-            if (vsoilPanel.doc === activeEditor?.document){
-                return vsoilPanel;
+        if (voilPanel){
+            if (voilPanel.doc === activeEditor?.document){
+                return voilPanel;
             }
         }
         return undefined;
     };
 
-    const getVsoilDocForActiveEditor = async () => {
+    const getVoilDocForActiveEditor = async () => {
         let activeEditor = vscode.window.activeTextEditor;
-        return getVsoilDocForEditor(activeEditor);
-        // if (activeEditor) {
-        //     let doc = vsoilDocs.find((doc) => doc.doc === activeEditor?.document);
-        //     if (doc) {
-        //         return doc;
-        //     }
-        // }
-        // if (vsoilPanel){
-        //     if (vsoilPanel.doc === activeEditor?.document){
-        //         return vsoilPanel;
-        //     }
-        // }
-        // return undefined;
+        return getVoilDocForEditor(activeEditor);
     }
 
     let lastFocusedEditor: vscode.TextEditor | undefined = undefined;
@@ -1354,16 +1346,16 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor(async (editor) => {
 
-            vscode.commands.executeCommand('setContext', 'vsoilDoc', editor?.document.uri.fsPath.endsWith('.vsoil'));
+            vscode.commands.executeCommand('setContext', 'voilDoc', editor?.document.uri.fsPath.endsWith('.voil'));
 
             // when active editor changes, update the cut identifiers
-            // this is to enable cutting between different vsoil panels
+            // this is to enable cutting between different voil panels
             // for example, in a two panel layout, if you cut a file in one panel and paste it in another panel
             // we need to have updated cut identifiers in the old panel when we switch to the new panel
             let prevEditor = lastFocusedEditor;
             lastFocusedEditor = editor;
-            if (prevEditor && prevEditor.document.uri.fsPath.endsWith('.vsoil')) {
-                let doc = await getVsoilDocForEditor(prevEditor);
+            if (prevEditor && prevEditor.document.uri.fsPath.endsWith('.voil')) {
+                let doc = await getVoilDocForEditor(prevEditor);
                 if (doc) {
                     let prevDirectory = doc.currentDir?.path;
                     let prevListingContent = await doc.getContentForPath(vscode.Uri.parse(prevDirectory!));
@@ -1372,7 +1364,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             // update the statusbar item
-            let doc = await getVsoilDocForEditor(editor);
+            let doc = await getVoilDocForEditor(editor);
             if (doc) {
                 updateStatusbar(doc);
             } else {
@@ -1386,11 +1378,11 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         vscode.window.onDidChangeTextEditorSelection(async (event) => {
-            if (!event.textEditor.document.uri.fsPath.endsWith('.vsoil')) {
+            if (!event.textEditor.document.uri.fsPath.endsWith('.voil')) {
                 return;
             }
 
-            let doc = await getVsoilDocForActiveEditor();
+            let doc = await getVoilDocForActiveEditor();
             if (doc == undefined) return;
 
             // if there is no text selection
