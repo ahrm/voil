@@ -1076,12 +1076,16 @@ export function activate(context: vscode.ExtensionContext) {
         if (modified){
             await updateDocContentToCurrentDir(doc);
             if (newNames.length > 0){
-                let nameParts = getPathParts(newNames[0]);
-                let firstPathPart = getPathParts(newNames[0])[0];
-                if (nameParts.length > 1){
-                    firstPathPart = firstPathPart + '/';
+                let focusString = newNames[0];
+                if (!doc.showRecursive){
+                    let nameParts = getPathParts(newNames[0]);
+                    let firstPathPart = getPathParts(newNames[0])[0];
+                    if (nameParts.length > 1) {
+                        firstPathPart = firstPathPart + '/';
+                    }
+                    focusString = firstPathPart; 
                 }
-                focusOnFileWithName(doc, firstPathPart);
+                focusOnFileWithName(doc, focusString);
             }
         }
 
