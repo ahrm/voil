@@ -144,6 +144,12 @@
               }
             },
             {
+              "scope": "vsoil.unlisted",
+              "settings": {
+                "foreground": "#666666"
+              }
+            },
+            {
               "scope": "vsoil.filetype.generic",
               "settings": {
                 "foreground": "#f48771"

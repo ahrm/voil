@@ -20,6 +20,10 @@
   {
     "match": "\\.\\./",
     "name": "vsoil.dirtype.dir"
+  },
+  {
+    "match": "^[\\s\\S]*$",
+    "name": "vsoil.unlisted"
   }
 ],
   "repository": {
