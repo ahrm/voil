@@ -1,5 +1,6 @@
 // c-o does not work well with preview document
 // preview mode can not launch if the current file does not exist
+// if multiple views of the same document, pressing enter handles the cursor of the first view
 
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -1133,7 +1134,9 @@ export function activate(context: vscode.ExtensionContext) {
                 let fileUri = vscode.Uri.joinPath(doc.currentDir!, currentDirName!);
                 let newdoc = await vscode.workspace.openTextDocument(fileUri);
                 await vscode.window.showTextDocument(newdoc);
-                await hidePreviewWindow();
+                if (doc.hasPreview){
+                    await hidePreviewWindow();
+                }
             }
         }
 
