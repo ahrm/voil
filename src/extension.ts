@@ -1101,8 +1101,7 @@ export function activate(context: vscode.ExtensionContext) {
         let doc = await getVoilDocForActiveEditor();
         if (!doc) return;
         // let activeEditor = doc.getTextEditor();
-        // let currentCursorLineIndex = vscode.window.activeTextEditor?.selection.active.line;
-        let currentCursorLineIndex = doc.getTextEditor()?.selection.active.line;
+        let currentCursorLineIndex = vscode.window.activeTextEditor?.selection.active.line;
         let prevDirectory = doc.currentDir?.path;
         if (currentCursorLineIndex !== undefined) {
             let {identifier, isDir, name} = parseLine(doc.doc.getText(doc.doc.lineAt(currentCursorLineIndex).range) ?? '');
