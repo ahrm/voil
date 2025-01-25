@@ -1430,7 +1430,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             let isPreviewWindow = editor?.document.uri.fsPath.endsWith(':preview.voil');
-            if (!isPreviewWindow){
+            if (!isPreviewWindow && hideIdentifier){
                 applyIdentifierDecoration(editor, editor?.document);
             }
 
