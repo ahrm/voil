@@ -73,6 +73,14 @@
         "title": "voil: sort by file name"
       },
       {
+        "command": "voil.handleEnter",
+        "title": "voil: Enter the current selected item."
+      },
+      {
+        "command": "voil.handleSave",
+        "title": "voil: Apply the changes to filesystem."
+      },
+      {
         "command": "voil.sortByFileType",
         "title": "voil: sort by file type"
       },
