@@ -1,7 +1,7 @@
 // c-o does not work well with preview document
 // preview mode can not launch if the current file does not exist
 // if multiple views of the same document, pressing enter handles the cursor of the first view
-// use vscode.workspace.onDidSaveTextDocument instead of handleSave
+// focus when a single directory is created is not working
 
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -1464,6 +1464,17 @@ export function activate(context: vscode.ExtensionContext) {
                 applyIdentifierDecoration(editor, editor?.document);
             }
 
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeTextDocument(async (event) => {
+            if (hideIdentifier){
+                let isVoil = event.document.uri.fsPath.endsWith('.voil') && !event.document.uri.fsPath.endsWith(':preview.voil');
+                if (isVoil){
+                    applyIdentifierDecoration(vscode.window.activeTextEditor, event.document);
+                }
+            }
         })
     );
 

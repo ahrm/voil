@@ -128,6 +128,11 @@
         "command": "voil.handleSave",
         "key": "ctrl+s",
         "when": "editorTextFocus && voilDoc"
+      },
+      {
+        "command": "voil.preview",
+        "key": "ctrl+enter",
+        "when": "editorTextFocus && voilDoc"
       }
     ],
     "configurationDefaults": {
