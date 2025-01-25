@@ -1114,7 +1114,7 @@ export function activate(context: vscode.ExtensionContext) {
                 if (!doc.showRecursive){
                     let nameParts = getPathParts(newNames[0]);
                     let firstPathPart = getPathParts(newNames[0])[0];
-                    if (nameParts.length > 1) {
+                    if (nameParts.length > 1 || newNames[0].endsWith('/')){
                         firstPathPart = firstPathPart + '/';
                     }
                     focusString = firstPathPart; 
