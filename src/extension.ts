@@ -1492,7 +1492,7 @@ export function activate(context: vscode.ExtensionContext) {
 
             // if there is no text selection
             if (!allowFocusOnIdentifier){
-                if (event.selections.length === 1 && event.selections[0].start.line === event.selections[0].end.line) {
+                if (event.selections.length === 1 && event.selections[0].start.line === event.selections[0].end.line && event.selections[0].start.character === event.selections[0].end.character) {
                     let startsWithListingRegex = LISTING_REGEX.test(event.textEditor.document.lineAt(event.selections[0].start.line).text);
                     if (startsWithListingRegex) {
                         // make sure that the cursor can not be before LISTING_PREFIX_SIZE

@@ -130,9 +130,19 @@
         "when": "editorTextFocus && voilDoc"
       },
       {
+        "command": "voil.handleEnter",
+        "key": "enter",
+        "when": "editorTextFocus && voilDoc && vim.mode == 'Normal'"
+      },
+      {
         "command": "voil.preview",
         "key": "ctrl+enter",
-        "when": "editorTextFocus && voilDoc"
+        "when": "editorTextFocus && voilDoc && vim.mode == 'Normal'"
+      },
+      {
+        "command": "voil.handleEnter",
+        "key": "ctrl+enter",
+        "when": "editorTextFocus && voilDoc && (!vim.active)"
       }
     ],
     "configurationDefaults": {
