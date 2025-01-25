@@ -1,6 +1,7 @@
 // c-o does not work well with preview document
 // preview mode can not launch if the current file does not exist
 // if multiple views of the same document, pressing enter handles the cursor of the first view
+// use vscode.workspace.onDidSaveTextDocument instead of handleSave
 
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -183,10 +184,11 @@ export function activate(context: vscode.ExtensionContext) {
         rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
     });
 
-    const applyIdentifierDecoration = () => {
-        let editor = vscode.window.activeTextEditor;
+
+    const applyIdentifierDecoration = (editor: vscode.TextEditor | undefined, doc: vscode.TextDocument | undefined) => {
+        editor = editor ?? vscode.window.activeTextEditor;
         if (!editor) return;
-        let doc = editor.document;
+        doc = doc ?? editor.document;
         let decorations: vscode.DecorationOptions[] = [];
         let renderOptions: vscode.DecorationRenderOptions = {
             after: {},
@@ -210,7 +212,6 @@ export function activate(context: vscode.ExtensionContext) {
         }
         editor.setDecorations(hideIdentifierDecoration, decorations);
     }
-
 
     function updateStatusbar(voil: VoilDoc) {
         if (voil.filterString.length > 0) {
@@ -922,6 +923,11 @@ export function activate(context: vscode.ExtensionContext) {
                 else {
                     lineContent = `${identifier} - ${meta}`;
                 }
+
+                if (isPreview){
+                    lineContent = '';
+                }
+
                 let dirPostfix = isDir ? '/' : '';
                 // pad line content to maxMetadataSize
                 lineContent = lineContent.padEnd(maxMetadataSize, ' ');
@@ -1266,7 +1272,7 @@ export function activate(context: vscode.ExtensionContext) {
                 // the changes in vscode.workspace.applyEdit are not immediately reflected in the document
                 // so we need to wait for a bit before applying the identifier decoration, this is a bit hacky
                 // so if anyone knows a better way to do this, please let me know
-                applyIdentifierDecoration();
+                applyIdentifierDecoration(docTextEditor, docTextEditor?.document);
             }, 50);
         }
 
@@ -1422,6 +1428,12 @@ export function activate(context: vscode.ExtensionContext) {
             } else {
                 filterStatusBarItem.hide();
             }
+
+            let isPreviewWindow = editor?.document.uri.fsPath.endsWith(':preview.voil');
+            if (!isPreviewWindow){
+                applyIdentifierDecoration(editor, editor?.document);
+            }
+
         })
     );
 
