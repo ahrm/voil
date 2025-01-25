@@ -1,8 +1,3 @@
-// c-o does not work well with preview document
-// preview mode can not launch if the current file does not exist
-// if multiple views of the same document, pressing enter handles the cursor of the first view
-// focus when a single directory is created is not working
-
 import * as vscode from 'vscode';
 import * as path from 'path';
 
@@ -89,16 +84,16 @@ async function showDeleteConfirmation(
         movedItemsList += `<li style="color:yellow;">${movedData.oldPath} → ${movedData.newData.name}</li>`;
     }
 
+    let deletedItemsHtml = deletedIdentifiers.size > 0 ? `<h2>Deleted Items:</h2><ul>${deletedItemsList}</ul>` : '';
+    let renamedItemsHtml = renamedIdentifiers.size > 0 ? `<h2>Renamed Items:</h2><ul>${renamedItemsList}</ul>` : '';
+    let movedItemsHtml = movedIdentifiers.size > 0 ? `<h2>Moved Items:</h2><ul>${movedItemsList}</ul>` : '';
     panel.webview.html = `
         <html>
         <body>
             <h2>Are you sure you want to delete/rename/move the following files/directories?</h2>
-            <h2>Deleted Items:</h2>
-            <ul>${deletedItemsList}</ul>
-            <h2>Renamed Items:</h2>
-            <ul>${renamedItemsList}</ul>
-            <h2>Moved Items:</h2>
-            <ul>${movedItemsList}</ul>
+            ${deletedItemsHtml}
+            ${renamedItemsHtml}
+            ${movedItemsHtml}
             <button id="noButton">No</button>
             <button id="yesButton">Yes</button>
             <script>
@@ -112,6 +107,16 @@ async function showDeleteConfirmation(
                 window.addEventListener('DOMContentLoaded', () => {
                     document.getElementById('noButton').focus();
                 });
+                window.addEventListener('keydown', (event) => {
+                    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+                        event.preventDefault();
+                        document.getElementById('noButton').focus();
+                    } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+                        event.preventDefault();
+                        document.getElementById('yesButton').focus();
+                    }
+                });
+
             </script>
         </body>
         </html>
@@ -277,13 +282,13 @@ export function activate(context: vscode.ExtensionContext) {
             let activeDocument = vscode.window.activeTextEditor?.document;
             for (let doc of savedEditorLayout.visibleDocuments){
                 if (column !== activeColumn){
-                    await vscode.window.showTextDocument(doc, { viewColumn: column });
+                    await vscode.window.showTextDocument(doc, { viewColumn: column});
                 }
                 column += 1;
             }
 
             if (activeDocument){
-            	await vscode.window.showTextDocument(activeDocument, { viewColumn: activeColumn });
+            	await vscode.window.showTextDocument(activeDocument, { viewColumn: activeColumn});
             }
         }
     };
