@@ -182,6 +182,11 @@
           "default": false,
           "description": "Allow focusing the cursor on the identifier in the voil window."
         },
+        "voil.hideIdentifier": {
+          "type": "boolean",
+          "default": true,
+          "description": "Hide the file identifiers in the voil window."
+        },
         "voil.customShellCommands": {
           "type": "array",
           "default": [],

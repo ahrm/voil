@@ -236,6 +236,7 @@ export function activate(context: vscode.ExtensionContext) {
     // let previewEnabled = false;
     let previewEnabled = config.get<boolean>('previewAutoOpen') ?? false;
     let allowFocusOnIdentifier = config.get<boolean>('allowFocusOnIdentifier') ?? false;
+    let hideIdentifier = config.get<boolean>('hideIdentifier') ?? true;
     let customShellCommands_ = config.get<CustomShellCommand[]>('customShellCommands');
     let customShellCommands = customShellCommands_?.map((cmd) => new CustomShellCommand(cmd.name, cmd.id, cmd.cmd));
 
@@ -244,6 +245,7 @@ export function activate(context: vscode.ExtensionContext) {
         config = vscode.workspace.getConfiguration('voil');
         previewEnabled = config.get<boolean>('previewAutoOpen') ?? false;
         allowFocusOnIdentifier = config.get<boolean>('allowFocusOnIdentifier') ?? false;
+        hideIdentifier = config.get<boolean>('hideIdentifier') ?? true;
         customShellCommands_ = config.get<CustomShellCommand[]>('customShellCommands');
         customShellCommands = customShellCommands_?.map((cmd) => new CustomShellCommand(cmd.name, cmd.id, cmd.cmd));
     });
@@ -1272,9 +1274,14 @@ export function activate(context: vscode.ExtensionContext) {
             await vscode.workspace.applyEdit(edit);
 
         }
-        setTimeout(() => {
-            applyIdentifierDecoration();
-        }, 50);
+        if (hideIdentifier){
+            setTimeout(() => {
+                // the changes in vscode.workspace.applyEdit are not immediately reflected in the document
+                // so we need to wait for a bit before applying the identifier decoration, this is a bit hacky
+                // so if anyone knows a better way to do this, please let me know
+                applyIdentifierDecoration();
+            }, 50);
+        }
 
     };
 
