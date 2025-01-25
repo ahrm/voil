@@ -178,6 +178,40 @@ let filterStatusBarItem: vscode.StatusBarItem;
 
 export function activate(context: vscode.ExtensionContext) {
 
+    const hideIdentifierDecoration = vscode.window.createTextEditorDecorationType({
+        textDecoration: 'none; font-size: 0pt',
+        rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
+    });
+
+    const applyIdentifierDecoration = () => {
+        let editor = vscode.window.activeTextEditor;
+        if (!editor) return;
+        let doc = editor.document;
+        let decorations: vscode.DecorationOptions[] = [];
+        let renderOptions: vscode.DecorationRenderOptions = {
+            after: {},
+            dark: {after: {}},
+            light: {after: {}},
+            rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
+        };
+
+        for (let lineIndex = 0; lineIndex < doc.lineCount; lineIndex++) {
+            let line = doc.lineAt(lineIndex);
+            let lineText = line.text;
+            let prefixSize = IDENTIFIER_SIZE + 4;
+            let identifier = lineText.slice(0, prefixSize);
+            if (identifier.length === prefixSize && identifier[0] === '/') {
+                let identifierRange = new vscode.Range(line.range.start, line.range.start.translate(0, prefixSize));
+                decorations.push({
+                    range: identifierRange,
+                    renderOptions: renderOptions
+                });
+            }
+        }
+        editor.setDecorations(hideIdentifierDecoration, decorations);
+    }
+
+
     function updateStatusbar(voil: VoilDoc) {
         if (voil.filterString.length > 0) {
             filterStatusBarItem.text = `$(search) filter: ${voil.filterString}`;
@@ -1236,7 +1270,11 @@ export function activate(context: vscode.ExtensionContext) {
             );
             edit.replace(doc.doc.uri, fullRange, content);
             await vscode.workspace.applyEdit(edit);
+
         }
+        setTimeout(() => {
+            applyIdentifierDecoration();
+        }, 50);
 
     };
 
