@@ -61,10 +61,6 @@
         "title": "voil: Filter files"
       },
       {
-        "command": "voil.debug",
-        "title": "voil: debug"
-      },
-      {
         "command": "voil.toggleFileSize",
         "title": "voil: toggle file size"
       },
@@ -91,14 +87,6 @@
       {
         "command": "voil.toggleSortOrder",
         "title": "voil: toggle sort order"
-      },
-      {
-        "command": "voil.saveLayout",
-        "title": "voil: save layout"
-      },
-      {
-        "command": "voil.restoreLayout",
-        "title": "voil: restore layout"
       },
       {
         "command": "voil.runShellCommandOnSelection",

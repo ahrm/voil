@@ -401,9 +401,6 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    const debugCommand = vscode.commands.registerCommand('voil.debug', async () => {
-    });
-
     const setFilterCommand = vscode.commands.registerCommand('voil.setFilter', async () => {
         let filterString = await vscode.window.showInputBox({ prompt: 'Enter filter pattern' });
         let voil = await getVoilDocForActiveEditor();
@@ -411,14 +408,6 @@ export function activate(context: vscode.ExtensionContext) {
             voil.setFilterPattern(filterString);
             await updateDocContentToCurrentDir(voil);
         }
-    });
-
-    const saveLayoutCommand = vscode.commands.registerCommand('voil.saveLayout', () => {
-        saveCurrentEditorLayout();
-    });
-
-    const restoreLayoutCommand = vscode.commands.registerCommand('voil.restoreLayout', () => {
-        restoreEditorLayout();
     });
 
     const gotoParentDirCommand = vscode.commands.registerCommand('voil.gotoParentDir', async () => {
@@ -440,8 +429,6 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.env.openExternal(vscode.Uri.file(doc.currentDir.path));
         }
     });
-
-    context.subscriptions.push(togglePreview);
 
     let getVoilDoc = async () => {
         if (voilPanel) {
@@ -1308,7 +1295,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.executeCommand('setContext', 'voilDoc', true);
     };
 
-    const opeVoilDoc = vscode.commands.registerCommand('voil.openPanel', async () => {
+    const openVoilDoc = vscode.commands.registerCommand('voil.openPanel', async () => {
         let doc = await newVoilDoc();
         await handleStartVoil(doc, vscode.workspace.workspaceFolders?.[0].uri!);
     });
@@ -1365,9 +1352,6 @@ export function activate(context: vscode.ExtensionContext) {
 
     });
 
-    // context.subscriptions.push(startVoilCommand);
-    // context.subscriptions.push(openVoilDoc);
-
     const getVoilDocForEditor = (activeEditor: vscode.TextEditor | undefined) => {
         if (activeEditor) {
             let doc = voilDocs.find((doc) => doc.doc === activeEditor?.document);
@@ -1389,6 +1373,27 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     let lastFocusedEditor: vscode.TextEditor | undefined = undefined;
+
+    context.subscriptions.push(handleSave);
+    context.subscriptions.push(handleEnter);
+    context.subscriptions.push(openVoilDoc);
+    context.subscriptions.push(startVoilCommand);
+    context.subscriptions.push(startVoilCommandCurrentDir);
+    context.subscriptions.push(openVoilDocCurrentDir);
+    context.subscriptions.push(togglePreview);
+    context.subscriptions.push(runShellCommandOnSelectionCommand);
+    context.subscriptions.push(runShellCommandWithIdOnSelectionCommand);
+    context.subscriptions.push(toggleFileSizeCommand);
+    context.subscriptions.push(toggleCreationDateCommand);
+    context.subscriptions.push(sortByFileNameCommand);
+    context.subscriptions.push(sortByCreationTimeCommand);
+    context.subscriptions.push(sortByFileTypeCommand);
+    context.subscriptions.push(sortByFileSizeCommand);
+    context.subscriptions.push(toggleSortOrderCommand);
+    context.subscriptions.push(toggleRecursiveCommand);
+    context.subscriptions.push(setFilterCommand);
+    context.subscriptions.push(gotoParentDirCommand);
+    context.subscriptions.push(openCurrentDirectory);
 
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor(async (editor) => {
