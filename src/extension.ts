@@ -1126,6 +1126,17 @@ export function activate(context: vscode.ExtensionContext) {
         cutIdentifiers.clear();
     });
 
+    const handlePreview = vscode.commands.registerCommand('voil.preview', async () => {
+        let doc = await getVoilDocForActiveEditor();
+        let line = vscode.window.activeTextEditor?.selection.active.line;
+        let lineContent = vscode.window.activeTextEditor?.document.getText(new vscode.Range(line!, 0, line!, 100));
+        let {identifier, isDir, name} = parseLine(lineContent ?? '');
+        let path = getPathForIdentifier(identifier);
+        if (path){
+            vscode.window.showTextDocument(vscode.Uri.parse(path), { preview: true, viewColumn: vscode.ViewColumn.Beside, preserveFocus: true });
+        }
+    });
+
     const handleEnter = vscode.commands.registerCommand('voil.handleEnter', async () => {
         let doc = await getVoilDocForActiveEditor();
         if (!doc) return;
@@ -1382,6 +1393,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(handleSave);
     context.subscriptions.push(handleEnter);
+    context.subscriptions.push(handlePreview);
     context.subscriptions.push(openVoilDoc);
     context.subscriptions.push(startVoilCommand);
     context.subscriptions.push(startVoilCommandCurrentDir);
