@@ -81,6 +81,10 @@
         "title": "voil: Open a preview to current selected item."
       },
       {
+        "command": "voil.close",
+        "title": "voil: Close the voil window."
+      },
+      {
         "command": "voil.handleSave",
         "title": "voil: Apply the changes to filesystem."
       },

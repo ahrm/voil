@@ -1126,6 +1126,23 @@ export function activate(context: vscode.ExtensionContext) {
         cutIdentifiers.clear();
     });
 
+    const handleClose = vscode.commands.registerCommand('voil.close', async () => {
+        // close the voil window
+        let doc = await getVoilDocForActiveEditor();
+        if (doc){
+
+            if (doc.watcher){
+                doc.watcher.dispose();
+            }
+
+            // remove doc from vsoilDocs
+            voilDocs = voilDocs.filter((d) => d !== doc);
+            await vscode.window.showTextDocument(doc.doc).then(async () => {
+                await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+            });
+        }
+    });
+
     const handlePreview = vscode.commands.registerCommand('voil.preview', async () => {
         let doc = await getVoilDocForActiveEditor();
         let line = vscode.window.activeTextEditor?.selection.active.line;
@@ -1394,6 +1411,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(handleSave);
     context.subscriptions.push(handleEnter);
     context.subscriptions.push(handlePreview);
+    context.subscriptions.push(handleClose);
     context.subscriptions.push(openVoilDoc);
     context.subscriptions.push(startVoilCommand);
     context.subscriptions.push(startVoilCommandCurrentDir);
