@@ -33,20 +33,16 @@
         "title": "voil: Open voil panel with preview at workspace root"
       },
       {
-        "command": "voil.openPanel",
-        "title": "voil: Open voil panel at workspace root"
-      },
-      {
         "command": "voil.openPanelWithPreviewCurrentDir",
         "title": "voil: Open voil panel with preview at current directory"
       },
       {
-        "command": "voil.openPanelCurrentDir",
-        "title": "voil: Open voil panel at current directory"
+        "command": "voil.openPanel",
+        "title": "voil: Open voil panel at workspace root"
       },
       {
-        "command": "voil.togglePreview",
-        "title": "voil: Toggle the voil preview window"
+        "command": "voil.openPanelCurrentDir",
+        "title": "voil: Open voil panel at current directory"
       },
       {
         "command": "voil.toggleRecursive",
@@ -73,7 +69,7 @@
         "title": "voil: sort by file name"
       },
       {
-        "command": "voil.handleEnter",
+        "command": "voil.enter",
         "title": "voil: Enter the current selected item."
       },
       {
@@ -85,7 +81,7 @@
         "title": "voil: Close the voil window."
       },
       {
-        "command": "voil.handleSave",
+        "command": "voil.save",
         "title": "voil: Apply the changes to filesystem."
       },
       {
@@ -125,12 +121,12 @@
     ],
     "keybindings": [
       {
-        "command": "voil.handleSave",
+        "command": "voil.save",
         "key": "ctrl+s",
         "when": "editorTextFocus && voilDoc"
       },
       {
-        "command": "voil.handleEnter",
+        "command": "voil.enter",
         "key": "enter",
         "when": "editorTextFocus && voilDoc && vim.mode == 'Normal'"
       },
@@ -140,7 +136,7 @@
         "when": "editorTextFocus && voilDoc && vim.mode == 'Normal'"
       },
       {
-        "command": "voil.handleEnter",
+        "command": "voil.enter",
         "key": "ctrl+enter",
         "when": "editorTextFocus && voilDoc && (!vim.active)"
       }

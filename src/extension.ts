@@ -24,6 +24,57 @@ const isSamePath =(path1: string, path2: string) => {
     return path.relative(path1, path2) === '';
 }
 
+class CustomShellCommand{
+    name: string;
+    id: string;
+    cmd: string;
+
+    constructor(name: string, id: string, cmd: string){
+        this.name = name;
+        this.id = id;
+        this.cmd = cmd;
+    }
+
+    async getInputs(){
+        // match ${inp:input_name}
+        let cmdWithInupts = this.cmd;
+        let inputRegex = /\${inp:([^}]+)}/g;
+        let inputNames = [];
+        let match;
+        while ((match = inputRegex.exec(this.cmd)) !== null) {
+            inputNames.push(match[1]);
+        }
+
+        for (let inputName of inputNames){
+            let input = await vscode.window.showInputBox({ prompt: `Enter value for ${inputName}` });
+            if (input){
+                cmdWithInupts = cmdWithInupts.replace(`\${inp:${inputName}}`, input);
+            }
+            else{
+                return undefined;
+            }
+        }
+        return cmdWithInupts;
+    }
+};
+
+// global variables
+var voilPanel: VoilDoc | undefined = undefined;
+var voilDocs: VoilDoc[] = [];
+var previewDoc: vscode.TextDocument | undefined = undefined;
+
+var pathToIdentifierMap: Map<string, string> = new Map();
+var identifierToPathMap: Map<string, string> = new Map();
+var cutIdentifiers = new Set<string>();
+
+let config = vscode.workspace.getConfiguration('voil');
+
+let previewEnabled = config.get<boolean>('previewAutoOpen') ?? false;
+let allowFocusOnIdentifier = config.get<boolean>('allowFocusOnIdentifier') ?? false;
+let hideIdentifier = config.get<boolean>('hideIdentifier') ?? true;
+let customShellCommands_ = config.get<CustomShellCommand[]>('customShellCommands');
+let customShellCommands = customShellCommands_?.map((cmd) => new CustomShellCommand(cmd.name, cmd.id, cmd.cmd));
+var savedEditorLayout: SavedEditorLayout | undefined = undefined;
 
 class DirectoryListingData {
     identifier: string;
@@ -61,7 +112,9 @@ function getFileSizeHumanReadableName(sizeInBytes: number) {
 }
 
 async function showDeleteConfirmation(
-    deletedIdentifiers: Map<string, DirectoryListingData[]>, renamedIdentifiers: Map<string, RenamedDirectoryListingItem>, movedIdentifiers: Map<string, RenamedDirectoryListingItem>) {
+    deletedIdentifiers: Map<string, DirectoryListingData[]>,
+    renamedIdentifiers: Map<string, RenamedDirectoryListingItem>,
+    movedIdentifiers: Map<string, RenamedDirectoryListingItem>) {
     const panel = vscode.window.createWebviewPanel(
         'deleteConfirmation',
         'Delete Confirmation',
@@ -146,105 +199,781 @@ type SavedEditorLayout = {
     visibleDocuments: vscode.TextDocument[];
 };
 
-class CustomShellCommand{
-    name: string;
-    id: string;
-    cmd: string;
 
-    constructor(name: string, id: string, cmd: string){
-        this.name = name;
-        this.id = id;
-        this.cmd = cmd;
+enum SortBy {
+    Name,
+    FileType,
+    Size,
+    CreationDate
+};
+
+const parseLine = (line: string): DirectoryListingData => {
+    if (line.endsWith("\r")) {
+        line = line.slice(0, -1);
+    }
+    if (line.indexOf(METADATA_BEGIN_SYMBOL) !== -1) {
+        // remove metadata
+        let startIndex = line.indexOf(METADATA_BEGIN_SYMBOL);
+        let endIndex = line.indexOf(METADATA_END_SYMBOL);
+        line = line.slice(0, startIndex) + line.slice(endIndex + METADATA_END_SYMBOL.length);
+    }
+    if (line == PREVDIR_LINE) {
+        return {
+            identifier: "",
+            isDir: true,
+            name: "..",
+            isNew: false
+        };
     }
 
-    async getInputs(){
-        // match ${inp:input_name}
-        let cmdWithInupts = this.cmd;
-        let inputRegex = /\${inp:([^}]+)}/g;
-        let inputNames = [];
-        let match;
-        while ((match = inputRegex.exec(this.cmd)) !== null) {
-            inputNames.push(match[1]);
-        }
+    // line begins with slash folllowed by identifier
+    let regex = /^\/[A-Za-z]{7}/;
+    let index = line.search(regex);
+    let hasIdentifier = index >= 0;
 
-        for (let inputName of inputNames){
-            let input = await vscode.window.showInputBox({ prompt: `Enter value for ${inputName}` });
-            if (input){
-                cmdWithInupts = cmdWithInupts.replace(`\${inp:${inputName}}`, input);
-            }
-            else{
-                return undefined;
-            }
-        }
-        return cmdWithInupts;
+    let parts = line.split(' ');
+    if (hasIdentifier) {
+        let identifier = parts[0].slice(1);
+        let typeString = parts[1];
+        let name = parts.slice(2).join(' ').trim();
+        return {
+            identifier: identifier,
+            isDir: typeString === '/',
+            name: name,
+            isNew: false
+        };
+    }
+    else {
+        let name = line;
+        let isDir = line.endsWith('/');
+        return {
+            identifier: '',
+            isDir: isDir,
+            name: name,
+            isNew: !name.startsWith('.')
+        };
+
     }
 };
 
+const getCutIdentifiersFromFileContents = (prevContentOnDisk: string, prevContentOnFile: string) => {
+    let diskIdentifiers = new Set<string>();
+    let fileIdentifiers = new Set<string>();
+
+    for (let line of prevContentOnDisk.split('\n')) {
+        let { identifier } = parseLine(line);
+        diskIdentifiers.add(identifier);
+    }
+
+    for (let line of prevContentOnFile.split('\n')) {
+        let { identifier } = parseLine(line);
+        fileIdentifiers.add(identifier);
+    }
+
+    let cutIds = new Set([...diskIdentifiers].filter(x => !fileIdentifiers.has(x)));
+    return cutIds;
+};
+
+const updateCutIdentifiers = async (doc: VoilDoc, prevContentOnDisk: string) => {
+    let prevContentOnFile = doc.doc.getText();
+
+    let cutIds = getCutIdentifiersFromFileContents(prevContentOnDisk, prevContentOnFile);
+    if (cutIds.size) {
+        cutIdentifiers = cutIds;
+    }
+};
+
+let updateDocContentToCurrentDir = async (doc: VoilDoc, prevDirectory: string | undefined = undefined) => {
+
+    let rootUri = doc.currentDir;
+    let content = await doc.getContentForPath(rootUri!);
+
+    if (prevDirectory) {
+        let prevContentOnDisk = await doc.getContentForPath(vscode.Uri.parse(prevDirectory));
+        updateCutIdentifiers(doc, prevContentOnDisk);
+    }
+    let docTextEditor = doc.getTextEditor();
+
+    // why do we do two different things here?
+    // it is possible the the document doesn't have a text editor, so we need the second option for that case
+    // however, that does not work very well when there are multiple simulataneous updates (e.g. when a lot of files are being copied)
+    // so we have the first option as well
+    if (docTextEditor) {
+        await docTextEditor.edit((editBuilder) => {
+            editBuilder.replace(new vscode.Range(
+                docTextEditor.document.positionAt(0),
+                docTextEditor.document.positionAt(docTextEditor.document.getText().length)
+            ), content);
+        });
+    }
+    else {
+
+        // set doc content
+        const edit = new vscode.WorkspaceEdit();
+        const fullRange = new vscode.Range(
+            doc.doc.positionAt(0),
+            doc.doc.positionAt(doc.doc.getText().length)
+        );
+        edit.replace(doc.doc.uri, fullRange, content);
+        await vscode.workspace.applyEdit(edit);
+
+    }
+    if (hideIdentifier) {
+        setTimeout(() => {
+            // the changes in vscode.workspace.applyEdit are not immediately reflected in the document
+            // so we need to wait for a bit before applying the identifier decoration, this is a bit hacky
+            // so if anyone knows a better way to do this, please let me know
+            applyIdentifierDecoration(docTextEditor, docTextEditor?.document);
+        }, 50);
+    }
+
+};
+
+const runShellCommand = (cmd: string, rootDir: string) => {
+    const exec = require('child_process').exec;
+    exec(cmd, { cwd: rootDir }, (error: any, stdout: any, stderr: any) => {
+        if (error) {
+            console.error(`exec error: ${error}`);
+            return;
+        }
+        console.log(`stdout: ${stdout}`);
+        console.error(`stderr: ${stderr}`);
+    });
+};
+
+const fileNameSorter = (a: [string, vscode.FileType], b: [string, vscode.FileType]) => {
+    let a_name = a[0];
+    let b_name = b[0];
+    if (a[1] !== vscode.FileType.Directory) {
+        // remove extension from file name
+        let a_parts = a_name.split('.');
+        let b_parts = b_name.split('.');
+        a_name = a_parts.length === 1 ? a_name : a_name.split('.').slice(0, -1).join('.');
+        b_name = b_parts.length === 1 ? b_name : b_name.split('.').slice(0, -1).join('.');
+    }
+
+    if (a[1] === b[1]) {
+        // compare file names. e.g. file1.txt should come before file10.txt even though lexicographically it should be the other way around
+        return a_name.localeCompare(b_name, undefined, { numeric: true });
+
+    }
+    return a[1] === vscode.FileType.Directory ? -1 : 1;
+};
+
+let generateRandomString = (length: number) => {
+    let result = '';
+    let characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    let charactersLength = characters.length;
+    for (let i = 0; i < length; i++) {
+        result += characters.charAt(Math.floor(Math.random() * charactersLength));
+    }
+    return result;
+};
+
+let getIdentifierForPath = (path: string) => {
+    if (pathToIdentifierMap.has(path)) {
+        return pathToIdentifierMap.get(path)!;
+    }
+    let identifier = generateRandomString(IDENTIFIER_SIZE);
+
+    while (identifierToPathMap.has(identifier)) {
+        identifier = generateRandomString(IDENTIFIER_SIZE);
+    }
+
+    pathToIdentifierMap.set(path, identifier);
+    identifierToPathMap.set(identifier, path);
+    return identifier;
+}
+
+const fileTypeSorter = (a: [string, vscode.FileType], b: [string, vscode.FileType]) => {
+    if (a[1] === b[1] && (a[1] !== vscode.FileType.Directory)) {
+        let aHasExt = a[0].includes('.');
+        let bHasExt = b[0].includes('.');
+        let aExt = aHasExt ? a[0].split('.').slice(-1)[0] : '';
+        let bExt = bHasExt ? b[0].split('.').slice(-1)[0] : '';
+        if (aExt === bExt) {
+            return a[0].localeCompare(b[0]);
+        }
+        return aExt.localeCompare(bExt);
+    }
+    return fileNameSorter(a, b);
+}
+
+class VoilDoc {
+    doc: vscode.TextDocument;
+    hasPreview: boolean;
+    currentDirectory: vscode.Uri;
+
+    watcher: vscode.FileSystemWatcher | undefined;
+    watcherHandleEventTimeout: NodeJS.Timeout | undefined = undefined;
+
+    showFileSize: boolean = false;
+    showFileCreationDate: boolean = false;
+    sortBy: SortBy = SortBy.Name;
+    isAscending: boolean = true;
+
+    filterString: string = "";
+
+    showRecursive: boolean = false;
+
+    constructor(doc: vscode.TextDocument, hasPreview: boolean, currentDir: vscode.Uri) {
+        this.doc = doc;
+        this.hasPreview = hasPreview;
+        this.currentDirectory = currentDir;
+        this.updateWatcher();
+    }
+
+    cancelWatcherTimeout() {
+        if (this.watcherHandleEventTimeout) {
+            clearTimeout(this.watcherHandleEventTimeout);
+        }
+    }
+
+    async toggleFileSize() {
+        this.showFileSize = !this.showFileSize;
+        await updateDocContentToCurrentDir(this);
+    }
+
+    async toggleCreationDate() {
+        this.showFileCreationDate = !this.showFileCreationDate;
+        await updateDocContentToCurrentDir(this);
+    }
+
+    async sortByFileType() {
+        this.sortBy = SortBy.FileType;
+        await updateDocContentToCurrentDir(this);
+    }
+
+    async sortByName() {
+        this.sortBy = SortBy.Name;
+        await updateDocContentToCurrentDir(this);
+    }
+
+    async sortByCreationTime() {
+        this.sortBy = SortBy.CreationDate;
+        await updateDocContentToCurrentDir(this);
+    }
+
+    async sortBySize() {
+        this.sortBy = SortBy.Size;
+        await updateDocContentToCurrentDir(this)
+    }
+
+    setFilterPattern(pattern: string) {
+        this.filterString = pattern;
+        updateStatusbar(this);
+    }
+
+    async toggleSortOrder() {
+        this.isAscending = !this.isAscending;
+        await updateDocContentToCurrentDir(this);
+    }
+
+    async focusOnLineWithContent(lineContent: string) {
+        let docText = this.doc?.getText();
+        let lineIndex = this.doc?.getText().split('\n').findIndex((line) => line.trimEnd().endsWith(` ${lineContent}`));
+        if (lineIndex !== undefined && lineIndex !== -1) {
+            let line = this.doc?.lineAt(lineIndex);
+            if (line) {
+                let selection = new vscode.Selection(line.range.start, line.range.start);
+                if (vscode.window.activeTextEditor) {
+                    vscode.window.activeTextEditor.selection = selection;
+                    vscode.window.activeTextEditor.revealRange(new vscode.Range(selection.start, selection.end));
+                }
+            }
+        }
+    }
+
+
+    resetWatcherTimeout() {
+        // some filesystem changes can trigger onDidChange multiple times in quick succession
+        // we want to wait for a bit before updating the document content, otherwise we might do
+        // it multiple times in quick succession which causes some issues
+
+        this.cancelWatcherTimeout();
+        this.watcherHandleEventTimeout = setTimeout(async () => {
+            await updateDocContentToCurrentDir(this);
+        }, 100);
+    }
+
+    updateWatcher() {
+        if (this.watcher) {
+            this.watcher.dispose();
+        }
+        this.watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(this.currentDirectory.fsPath, '*'));
+        this.watcher.onDidChange(async (e) => {
+            this.resetWatcherTimeout();
+        });
+        this.watcher.onDidDelete(async (e) => {
+            this.resetWatcherTimeout();
+        });
+        this.watcher.onDidCreate(async (e) => {
+            this.resetWatcherTimeout();
+        });
+    }
+
+    getTextEditor() {
+        return vscode.window.visibleTextEditors.find((editor) => editor.document === this.doc);
+    }
+
+    getFocusItem() {
+        let editor = this.getTextEditor();
+        let currentCursorLineIndex = editor?.selection.active.line;
+        if (currentCursorLineIndex !== undefined) {
+            return parseLine(this.doc.getText(this.doc.lineAt(currentCursorLineIndex).range));
+        }
+        return undefined;
+    }
+
+
+    getSelectedItems() {
+        let editor = this.getTextEditor();
+        let selectedItems: DirectoryListingData[] = [];
+        if (editor) {
+            for (let selection of editor.selections) {
+                for (let i = selection.start.line; i <= selection.end.line; i++) {
+                    let line = this.doc.getText(this.doc.lineAt(i).range);
+                    let item = parseLine(line);
+                    selectedItems.push(item);
+                }
+            }
+        }
+        return selectedItems;
+    }
+
+    runShellCommandOnSelectedItems(cmd: string) {
+        // if the command contains ${file}, we run it for each selected file
+        // if the command contains ${files}, we run it for all selected files at once
+
+        let isBatch = cmd.includes('${files}') || cmd.includes('${filenames}');
+        let items = this.getSelectedItems();
+        let rootDir: string = this.currentDir.path;
+
+        if (process.platform === "win32") {
+            rootDir = rootDir.slice(1);
+        }
+
+        const mapFilenameToPath = (filename: string) => {
+            let res = vscode.Uri.joinPath(this.currentDir!, filename).path;
+            if (res[0] == "/" && (process.platform === "win32")) {
+                res = res.slice(1);
+            }
+            return res;
+        };
+
+        if (isBatch) {
+            let filesString = items.map(({ name }) => mapFilenameToPath(name)).join(' ');
+            let fileNamesString = items.map(({ name }) => name).join(' ');
+
+            let batchCmd = cmd.replace('${files}', filesString);
+            batchCmd = batchCmd.replace('${filenames}', fileNamesString);
+            runShellCommand(batchCmd, rootDir);
+        }
+        else {
+            for (let { name } of items) {
+                var fullPath = mapFilenameToPath(name);
+                let commandToRun = cmd.replace('${file}', fullPath);
+                commandToRun = commandToRun.replace('${filename}', name);
+                runShellCommand(commandToRun, rootDir);
+            }
+        }
+    }
+
+    handleClose() {
+        if (this.watcher) {
+            this.watcher.dispose();
+        }
+    }
+
+    get currentDir() {
+        return this.currentDirectory;
+    }
+
+    set currentDir(uri: vscode.Uri) {
+        this.currentDirectory = uri;
+        this.updateWatcher();
+    }
+
+    async getFilesRecursive(rootUri: vscode.Uri, prefix: string = '', ignoredPatterns: string[] = []): Promise<[string, vscode.FileType][]> {
+        let files = await vscode.workspace.fs.readDirectory(rootUri);
+        let res: [string, vscode.FileType][] = [];
+        let gitignoreFile = vscode.Uri.joinPath(rootUri, '.gitignore');
+        if (await vscode.workspace.fs.stat(gitignoreFile).then(() => true, () => false)) {
+            let gitignoreContent = (await vscode.workspace.fs.readFile(gitignoreFile)).toString();
+            ignoredPatterns = ignoredPatterns.concat(gitignoreContent.split('\n').filter((line) => line.trim().length > 0));
+        }
+        for (let [name, type] of files) {
+            if (ignoredPatterns.some((pattern) => name.includes(pattern))) {
+                continue;
+            }
+            if (type === vscode.FileType.Directory) {
+                if (IGNORED_DIRNAMES.includes(name)) {
+                    continue;
+                }
+
+                let newPrefix = prefix + name + '/';
+                let subFiles = await this.getFilesRecursive(vscode.Uri.joinPath(rootUri, name), newPrefix);
+                res.push(...subFiles);
+            }
+            else {
+                res.push([prefix + name, type]);
+            }
+            if (res.length > MAX_RECURSIVE_DIR_LISTING_SIZE) {
+                // alert the user that the listing is too large
+                break;
+            }
+        }
+        return res;
+    }
+
+    async getContentForPath(rootUri: vscode.Uri, isPreview: boolean = false) {
+        let files = await vscode.workspace.fs.readDirectory(rootUri!);
+        if (!isPreview && this.showRecursive) {
+            files = await this.getFilesRecursive(rootUri);
+        }
+        let content = '';
+
+        let fileNameToMetadata: Map<string, string> = new Map();
+        let fileNameToStats: Map<string, vscode.FileStat> = new Map();
+
+        let needsMetaString = this.showFileSize || this.showFileCreationDate;
+        let maxMetadataSize = 0;
+        if (needsMetaString || this.sortBy === SortBy.Size || this.sortBy === SortBy.CreationDate) {
+            for (let file of files) {
+                let fullPath = vscode.Uri.joinPath(rootUri!, file[0]).path;
+                if ((process.platform === "win32") && ILLEGAL_FILE_NAMES_ON_WINDOWS.includes(file[0])) {
+                    continue;
+                }
+                let stats = await vscode.workspace.fs.stat(vscode.Uri.parse(fullPath));
+                fileNameToStats.set(file[0], stats);
+
+                if (needsMetaString) {
+                    let metaString = '';
+                    let numSeparators = 0;
+
+                    const addSeparator = () => {
+                        if (metaString.length > 0) {
+                            metaString += '|';
+                            numSeparators += 1;
+                        }
+                    };
+
+                    if (this.showFileSize) {
+                        let fileSizeString = getFileSizeHumanReadableName(stats.size);
+                        addSeparator();
+                        metaString += fileSizeString;
+                    }
+                    if (this.showFileCreationDate) {
+                        let fileDateString = new Date(stats.mtime).toLocaleDateString();
+                        addSeparator();
+                        metaString += fileDateString;
+
+                    }
+                    // let metaString = `${fileDateString}|${fileSizeString}`;
+                    fileNameToMetadata.set(file[0], metaString);
+                    let metaDataSize = IDENTIFIER_SIZE + 8 + numSeparators + metaString.length;
+                    if (metaDataSize > maxMetadataSize) {
+                        maxMetadataSize = metaDataSize;
+                    }
+
+                }
+            }
+        }
+
+
+        let sorter = fileNameSorter;
+        if (this.sortBy === SortBy.FileType) {
+            sorter = fileTypeSorter;
+        }
+        if (this.sortBy === SortBy.CreationDate) {
+            let statsSorter = (a: [string, vscode.FileType], b: [string, vscode.FileType]) => {
+                let aStats = fileNameToStats.get(a[0]);
+                let bStats = fileNameToStats.get(b[0]);
+                if (aStats && bStats) {
+                    return aStats.ctime - bStats.ctime;
+                }
+                return 0;
+            };
+            sorter = statsSorter;
+        }
+        if (this.sortBy === SortBy.Size) {
+            let sizeSorter = (a: [string, vscode.FileType], b: [string, vscode.FileType]) => {
+                let aStats = fileNameToStats.get(a[0]);
+                let bStats = fileNameToStats.get(b[0]);
+                if (aStats && bStats) {
+                    return aStats.size - bStats.size;
+                }
+                return 0;
+            };
+            sorter = sizeSorter;
+        }
+
+        if (!this.isAscending) {
+            let oldSorter = sorter;
+            sorter = (a: [string, vscode.FileType], b: [string, vscode.FileType]) => -oldSorter(a, b);
+        }
+
+        // first show directories and then files
+        files.sort(sorter);
+
+        content += `${PREVDIR_LINE}\n`;
+        for (let file of files) {
+
+            // we don't want to filter the content of previews
+            if (!isPreview) {
+                if (this.filterString && !file[0].includes(this.filterString)) {
+                    continue;
+                }
+            }
+
+            let isDir = file[1] === vscode.FileType.Directory;
+            let fullPath = vscode.Uri.joinPath(rootUri!, file[0]).path;
+            let identifier = getIdentifierForPath(fullPath);
+            let meta = '';
+            if (this.showFileSize || this.showFileCreationDate) {
+                meta = fileNameToMetadata.get(file[0]) ?? '';
+                meta = METADATA_BEGIN_SYMBOL + meta + METADATA_END_SYMBOL;
+            }
+
+            let lineContent = '';
+            if (isDir) {
+                lineContent = `${identifier} / ${meta}`;
+            }
+            else {
+                lineContent = `${identifier} - ${meta}`;
+            }
+
+            if (isPreview) {
+                lineContent = '';
+            }
+
+            let dirPostfix = isDir ? '/' : '';
+            // pad line content to maxMetadataSize
+            lineContent = lineContent.padEnd(maxMetadataSize, ' ');
+            content += `/${lineContent}${file[0]}${dirPostfix}\n`;
+        }
+        return content;
+    }
+}
+
 let filterStatusBarItem: vscode.StatusBarItem;
 
-export function activate(context: vscode.ExtensionContext) {
-
+const applyIdentifierDecoration = (editor: vscode.TextEditor | undefined, doc: vscode.TextDocument | undefined) => {
     const hideIdentifierDecoration = vscode.window.createTextEditorDecorationType({
         textDecoration: 'none; font-size: 0pt',
         rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
     });
+    editor = editor ?? vscode.window.activeTextEditor;
+    if (!editor) return;
+    doc = doc ?? editor.document;
+    let decorations: vscode.DecorationOptions[] = [];
+    let renderOptions: vscode.DecorationRenderOptions = {
+        after: {},
+        dark: { after: {} },
+        light: { after: {} },
+        rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
+    };
 
-
-    const applyIdentifierDecoration = (editor: vscode.TextEditor | undefined, doc: vscode.TextDocument | undefined) => {
-        editor = editor ?? vscode.window.activeTextEditor;
-        if (!editor) return;
-        doc = doc ?? editor.document;
-        let decorations: vscode.DecorationOptions[] = [];
-        let renderOptions: vscode.DecorationRenderOptions = {
-            after: {},
-            dark: {after: {}},
-            light: {after: {}},
-            rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
-        };
-
-        for (let lineIndex = 0; lineIndex < doc.lineCount; lineIndex++) {
-            let line = doc.lineAt(lineIndex);
-            let lineText = line.text;
-            let prefixSize = IDENTIFIER_SIZE + 4;
-            let identifier = lineText.slice(0, prefixSize);
-            if (identifier.length === prefixSize && identifier[0] === '/') {
-                let identifierRange = new vscode.Range(line.range.start, line.range.start.translate(0, prefixSize));
-                decorations.push({
-                    range: identifierRange,
-                    renderOptions: renderOptions
-                });
-            }
+    for (let lineIndex = 0; lineIndex < doc.lineCount; lineIndex++) {
+        let line = doc.lineAt(lineIndex);
+        let lineText = line.text;
+        let prefixSize = IDENTIFIER_SIZE + 4;
+        let identifier = lineText.slice(0, prefixSize);
+        if (identifier.length === prefixSize && identifier[0] === '/') {
+            let identifierRange = new vscode.Range(line.range.start, line.range.start.translate(0, prefixSize));
+            decorations.push({
+                range: identifierRange,
+                renderOptions: renderOptions
+            });
         }
-        editor.setDecorations(hideIdentifierDecoration, decorations);
     }
+    editor.setDecorations(hideIdentifierDecoration, decorations);
+}
 
-    function updateStatusbar(voil: VoilDoc) {
-        if (voil.filterString.length > 0) {
-            filterStatusBarItem.text = `$(search) filter: ${voil.filterString}`;
-            filterStatusBarItem.show();
+function updateStatusbar(voil: VoilDoc) {
+    if (voil.filterString.length > 0) {
+        filterStatusBarItem.text = `$(search) filter: ${voil.filterString}`;
+        filterStatusBarItem.show();
+    }
+    else {
+        filterStatusBarItem.hide();
+    }
+}
+
+const saveCurrentEditorLayout = async () => {
+    const layout = await vscode.commands.executeCommand('vscode.getEditorLayout') as EditorLayout;
+    const visibleDocuments = vscode.window.visibleTextEditors.map((editor) => editor.document);
+    savedEditorLayout = {
+        layout: layout,
+        visibleDocuments: visibleDocuments
+    };
+
+};
+
+const restoreEditorLayout = async () => {
+    if (savedEditorLayout) {
+        await vscode.commands.executeCommand('vscode.setEditorLayout', savedEditorLayout.layout);
+        let column = 1;
+        let activeColumn = vscode.window.activeTextEditor?.viewColumn;
+        let activeDocument = vscode.window.activeTextEditor?.document;
+        for (let doc of savedEditorLayout.visibleDocuments) {
+            if (column !== activeColumn) {
+                await vscode.window.showTextDocument(doc, { viewColumn: column });
+            }
+            column += 1;
+        }
+
+        if (activeDocument) {
+            await vscode.window.showTextDocument(activeDocument, { viewColumn: activeColumn });
+        }
+    }
+};
+
+const hidePreviewWindow = async () => {
+    if (previewEnabled) {
+        restoreEditorLayout();
+    }
+};
+
+const closeNonVisibleVoilDocs = async () => {
+    let docsToClose = [];
+    if (voilPanel) {
+        let isVisible = vscode.window.visibleTextEditors.some((editor) => editor.document === voilPanel?.doc);
+        if (!isVisible) {
+            docsToClose.push(voilPanel);
+            voilPanel = undefined;
+        }
+    }
+    let docsToKeep = [];
+    for (let doc of voilDocs) {
+        let isVisible = vscode.window.visibleTextEditors.some((editor) => editor.document === doc.doc);
+        if (isVisible) {
+            docsToKeep.push(doc);
         }
         else {
-            filterStatusBarItem.hide();
+            docsToClose.push(doc);
+        }
+    }
+    voilDocs = docsToKeep;
+    for (let doc of docsToClose) {
+        doc.handleClose();
+        await vscode.window.showTextDocument(doc.doc).then(async () => {
+            await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+        });
+    }
+};
+
+const getVoilDocForEditor = (activeEditor: vscode.TextEditor | undefined) => {
+    if (activeEditor) {
+        let doc = voilDocs.find((doc) => doc.doc === activeEditor?.document);
+        if (doc) {
+            return doc;
+        }
+    }
+    if (voilPanel) {
+        if (voilPanel.doc === activeEditor?.document) {
+            return voilPanel;
+        }
+    }
+    return undefined;
+};
+
+const getVoilDocForActiveEditor = async () => {
+    let activeEditor = vscode.window.activeTextEditor;
+    return getVoilDocForEditor(activeEditor);
+}
+
+let getVoilDoc = async () => {
+    if (voilPanel) {
+        return voilPanel;
+    }
+    let doc = await vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:Voil.voil'));
+    let res = new VoilDoc(doc, previewEnabled, vscode.workspace.workspaceFolders?.[0].uri!);
+    voilPanel = res;
+    return res;
+};
+    
+let newVoilDoc = async () => {
+    let nonVisibleVoilDocs = voilDocs.filter((doc) => !vscode.window.visibleTextEditors.some((editor) => editor.document === doc.doc));
+    if (nonVisibleVoilDocs.length > 0) {
+        return nonVisibleVoilDocs[0];
+    }
+
+    let doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(`untitled:Voil-doc${voilDocs.length}.voil`));
+    let res = new VoilDoc(doc, false, vscode.workspace.workspaceFolders?.[0].uri!);
+    voilDocs.push(res);
+    return res;
+};
+
+let getPreviewDoc = async () => {
+    if (previewDoc) {
+        return previewDoc;
+    }
+    previewDoc = await vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:Voil:preview.voil'));
+    return previewDoc;
+};
+
+let getPathForIdentifier = (identifier: string) => {
+    if (identifierToPathMap.has(identifier)) {
+        return identifierToPathMap.get(identifier);
+    }
+    return '';
+}
+
+const focusOnFileWithName = async (voil: VoilDoc, name: string) => {
+    let lineIndex = voil.doc.getText().split('\n').findIndex((line) => line.trimEnd().endsWith(name));
+    if (lineIndex !== -1) {
+        let line = voil.doc.lineAt(lineIndex);
+        let selection = new vscode.Selection(line.range.start, line.range.start);
+        if (vscode.window.activeTextEditor) {
+            vscode.window.activeTextEditor.selection = selection;
+            vscode.window.activeTextEditor.revealRange(new vscode.Range(selection.start, selection.end));
+        }
+    }
+};
+
+const getIdentifiersFromContent = (content: string) => {
+    let res: Map<string, DirectoryListingData[]> = new Map();
+    for (let line of content.split('\n')) {
+        if (line.trim().length === 0) {
+            continue;
+        }
+        if (line.trim() === PREVDIR_LINE) {
+            continue;
+        }
+        let { identifier, isDir, name, isNew } = parseLine(line);
+        let oldList: DirectoryListingData[] = res.get(identifier) || [];
+        oldList.push({ identifier, isDir, name, isNew });
+        res.set(identifier, oldList);
+    }
+    return res;
+};
+
+const handleStartVoil = async (doc: VoilDoc, initialUri: vscode.Uri, fileToFocus: string | undefined = undefined) => {
+    // doc.currentDir = vscode.workspace.workspaceFolders?.[0].uri!;
+    doc.currentDir = initialUri;
+    await updateDocContentToCurrentDir(doc);
+
+    await vscode.window.showTextDocument(doc.doc);
+    // move cursor to the first line
+    let selection = new vscode.Selection(doc.doc.positionAt(0), doc.doc.positionAt(0));
+    if (fileToFocus) {
+        let lineIndex = doc.doc.getText().split('\n').findIndex((line) => line.trimEnd().endsWith(fileToFocus));
+        if (lineIndex !== undefined && lineIndex !== -1) {
+            let line = doc.doc.lineAt(lineIndex);
+            selection = new vscode.Selection(line.range.start, line.range.start);
         }
     }
 
+    if (vscode.window.activeTextEditor) {
+        vscode.window.activeTextEditor.selection = selection;
+    }
+
+    vscode.commands.executeCommand('setContext', 'voilDoc', true);
+};
+
+export function activate(context: vscode.ExtensionContext) {
     // var currentDir = vscode.workspace.workspaceFolders?.[0].uri;
-    var voilPanel: VoilDoc | undefined = undefined;
-    var voilDocs: VoilDoc[] = [];
-    var previewDoc: vscode.TextDocument | undefined = undefined;
-
-    var pathToIdentifierMap: Map<string, string> = new Map();
-    var identifierToPathMap: Map<string, string> = new Map();
-    var cutIdentifiers = new Set<string>();
-
-    let config = vscode.workspace.getConfiguration('voil');
-
-    // let previewEnabled = false;
-    let previewEnabled = config.get<boolean>('previewAutoOpen') ?? false;
-    let allowFocusOnIdentifier = config.get<boolean>('allowFocusOnIdentifier') ?? false;
-    let hideIdentifier = config.get<boolean>('hideIdentifier') ?? true;
-    let customShellCommands_ = config.get<CustomShellCommand[]>('customShellCommands');
-    let customShellCommands = customShellCommands_?.map((cmd) => new CustomShellCommand(cmd.name, cmd.id, cmd.cmd));
 
     // update the settings when they change
     vscode.workspace.onDidChangeConfiguration((e) => {
@@ -256,80 +985,9 @@ export function activate(context: vscode.ExtensionContext) {
         customShellCommands = customShellCommands_?.map((cmd) => new CustomShellCommand(cmd.name, cmd.id, cmd.cmd));
     });
 
-
-    const togglePreview = vscode.commands.registerCommand('voil.togglePreview', () => {
-        previewEnabled = !previewEnabled;
-    });
-
-
-    var savedEditorLayout: SavedEditorLayout | undefined = undefined;
-
-    const saveCurrentEditorLayout = async () =>{
-        const layout = await vscode.commands.executeCommand('vscode.getEditorLayout') as EditorLayout;
-        const visibleDocuments = vscode.window.visibleTextEditors.map((editor) => editor.document);
-        savedEditorLayout = {
-            layout: layout,
-            visibleDocuments: visibleDocuments
-        };
-
-    };
-
-    const restoreEditorLayout = async () => {
-        if (savedEditorLayout){
-            await vscode.commands.executeCommand('vscode.setEditorLayout', savedEditorLayout.layout);
-            let column = 1;
-            let activeColumn = vscode.window.activeTextEditor?.viewColumn;
-            let activeDocument = vscode.window.activeTextEditor?.document;
-            for (let doc of savedEditorLayout.visibleDocuments){
-                if (column !== activeColumn){
-                    await vscode.window.showTextDocument(doc, { viewColumn: column});
-                }
-                column += 1;
-            }
-
-            if (activeDocument){
-            	await vscode.window.showTextDocument(activeDocument, { viewColumn: activeColumn});
-            }
-        }
-    };
-
-    const hidePreviewWindow = async  () =>{
-        if (previewEnabled){
-            restoreEditorLayout();
-        }
-    };
-
-    const closeNonVisibleVoilDocs = async () => {
-        let docsToClose = [];
-        if (voilPanel){
-            let isVisible = vscode.window.visibleTextEditors.some((editor) => editor.document === voilPanel?.doc);
-            if (!isVisible){
-                docsToClose.push(voilPanel);
-                voilPanel = undefined;
-            }
-        }
-        let docsToKeep = [];
-        for (let doc of voilDocs){
-            let isVisible = vscode.window.visibleTextEditors.some((editor) => editor.document === doc.doc);
-            if (isVisible){
-                docsToKeep.push(doc);
-            }
-            else{
-                docsToClose.push(doc);
-            }
-        }
-        voilDocs = docsToKeep;
-        for (let doc of docsToClose){
-            doc.handleClose();
-            await vscode.window.showTextDocument(doc.doc).then(async () => {
-                await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
-            });
-        }
-    };
-
     const runShellCommandOnSelectionCommand = vscode.commands.registerCommand('voil.runShellCommandOnSelection', async () => {
         let shellCommand = await vscode.window.showInputBox({ prompt: 'Enter shell command to run on selected items' });
-        if (shellCommand){
+        if (shellCommand) {
             let voil = await getVoilDocForActiveEditor();
             if (voil !== undefined) {
                 voil.runShellCommandOnSelectedItems(shellCommand)
@@ -436,513 +1094,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    let getVoilDoc = async () => {
-        if (voilPanel) {
-            return voilPanel;
-        }
-        let doc = await vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:Voil.voil'));
-        let res = new VoilDoc(doc, previewEnabled, vscode.workspace.workspaceFolders?.[0].uri!);
-        voilPanel = res;
-        return res;
-    };
-
-    let newVoilDoc = async () => {
-        let nonVisibleVoilDocs = voilDocs.filter((doc) => !vscode.window.visibleTextEditors.some((editor) => editor.document === doc.doc));
-        if (nonVisibleVoilDocs.length > 0){
-            return nonVisibleVoilDocs[0];
-        }
-
-        let doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(`untitled:Voil-doc${voilDocs.length}.voil`));
-        let res = new VoilDoc(doc, false, vscode.workspace.workspaceFolders?.[0].uri!);
-        voilDocs.push(res);
-        return res;
-    };
-
-    let getPreviewDoc = async () => {
-        if (previewDoc) {
-            return previewDoc;
-        }
-        previewDoc = await vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:Voil:preview.voil'));
-        return previewDoc;
-    };
-
-    let getIdentifierForPath = (path: string) => {
-        if (pathToIdentifierMap.has(path)){
-            return pathToIdentifierMap.get(path)!;
-        }
-        let identifier = generateRandomString(IDENTIFIER_SIZE);
-
-        while (identifierToPathMap.has(identifier)){
-            identifier = generateRandomString(IDENTIFIER_SIZE);
-        }
-
-        pathToIdentifierMap.set(path, identifier);
-        identifierToPathMap.set(identifier, path);
-        return identifier;
-    }
-
-    let getPathForIdentifier = (identifier: string) => {
-        if (identifierToPathMap.has(identifier)){
-            return identifierToPathMap.get(identifier);
-        }
-        return '';
-    }
-
-    let generateRandomString = (length: number) => {
-        let result = '';
-        let characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-        let charactersLength = characters.length;
-        for (let i = 0; i < length; i++) {
-            result += characters.charAt(Math.floor(Math.random() * charactersLength));
-        }
-        return result;
-    };
-
-
-    const parseLine = (line: string): DirectoryListingData => {
-        if (line.endsWith("\r")){
-            line = line.slice(0, -1);
-        }
-        if (line.indexOf(METADATA_BEGIN_SYMBOL) !== -1){
-            // remove metadata
-            let startIndex = line.indexOf(METADATA_BEGIN_SYMBOL);
-            let endIndex = line.indexOf(METADATA_END_SYMBOL);
-            line = line.slice(0, startIndex) + line.slice(endIndex + METADATA_END_SYMBOL.length);
-        }
-        if (line == PREVDIR_LINE){
-            return {
-                identifier: "",
-                isDir: true,
-                name: "..",
-                isNew: false
-            };
-        }
-
-        // line begins with slash folllowed by identifier
-        let regex = /^\/[A-Za-z]{7}/;
-        let index = line.search(regex);
-        let hasIdentifier = index >= 0;
-
-        let parts = line.split(' ');
-        if (hasIdentifier){
-            let identifier = parts[0].slice(1);
-            let typeString = parts[1];
-            let name = parts.slice(2).join(' ').trim();
-            return {
-                identifier: identifier,
-                isDir: typeString === '/',
-                name: name,
-                isNew: false
-            };
-        }
-        else{
-            let name = line;
-            let isDir = line.endsWith('/');
-            return {
-                identifier: '',
-                isDir: isDir,
-                name: name,
-                isNew: !name.startsWith('.')
-            };
-
-        }
-    };
-
-
-    const focusOnFileWithName = async (voil: VoilDoc, name: string) => {
-        let lineIndex = voil.doc.getText().split('\n').findIndex((line) => line.trimEnd().endsWith(name));
-        if (lineIndex !== -1) {
-            let line = voil.doc.lineAt(lineIndex);
-            let selection = new vscode.Selection(line.range.start, line.range.start);
-            if (vscode.window.activeTextEditor) {
-                vscode.window.activeTextEditor.selection = selection;
-                vscode.window.activeTextEditor.revealRange(new vscode.Range(selection.start, selection.end));
-            }
-        }
-    };
-
-    const getIdentifiersFromContent = (content: string) => {
-        let res: Map<string, DirectoryListingData[]> = new Map();
-        for (let line of content.split('\n')){
-            if (line.trim().length === 0) {
-                continue;
-            }
-            if (line.trim() === PREVDIR_LINE){
-                continue;
-            }
-            let { identifier, isDir, name, isNew } = parseLine(line);
-            let oldList: DirectoryListingData[] = res.get(identifier) || [];
-            oldList.push({ identifier, isDir, name, isNew });
-            res.set(identifier, oldList);
-        }
-        return res;
-    };
-
-    enum SortBy{
-        Name,
-        FileType,
-        Size,
-        CreationDate
-    };
-
-    class VoilDoc {
-        doc: vscode.TextDocument;
-        hasPreview: boolean;
-        currentDirectory: vscode.Uri;
-
-        watcher: vscode.FileSystemWatcher | undefined;
-        watcherHandleEventTimeout: NodeJS.Timeout | undefined = undefined;
-
-        showFileSize: boolean = false;
-        showFileCreationDate: boolean = false;
-        sortBy: SortBy = SortBy.Name;
-        isAscending: boolean = true; 
-
-        filterString: string = "";
-
-        showRecursive: boolean = false;
-
-        constructor(doc: vscode.TextDocument, hasPreview: boolean, currentDir: vscode.Uri){
-            this.doc = doc;
-            this.hasPreview = hasPreview;
-            this.currentDirectory = currentDir;
-            this.updateWatcher();
-        }
-
-        cancelWatcherTimeout(){
-            if (this.watcherHandleEventTimeout){
-                clearTimeout(this.watcherHandleEventTimeout);
-            }
-        }
-
-        async toggleFileSize(){
-            this.showFileSize = !this.showFileSize;
-            await updateDocContentToCurrentDir(this);
-        }
-
-        async toggleCreationDate(){
-            this.showFileCreationDate = !this.showFileCreationDate;
-            await updateDocContentToCurrentDir(this);
-        }
-
-        async sortByFileType(){
-            this.sortBy = SortBy.FileType;
-            await updateDocContentToCurrentDir(this);
-        }
-
-        async sortByName(){
-            this.sortBy = SortBy.Name;
-            await updateDocContentToCurrentDir(this);
-        }
-
-        async sortByCreationTime(){
-            this.sortBy = SortBy.CreationDate;
-            await updateDocContentToCurrentDir(this);
-        }
-
-        async sortBySize(){
-            this.sortBy = SortBy.Size;
-            await updateDocContentToCurrentDir(this)
-        }
-
-        setFilterPattern(pattern: string) {
-            this.filterString = pattern;
-            updateStatusbar(this);
-        }
-
-        async toggleSortOrder(){
-            this.isAscending = !this.isAscending;
-            await updateDocContentToCurrentDir(this);
-        }
-
-        async focusOnLineWithContent(lineContent: string){
-            let docText = this.doc?.getText();
-            let lineIndex = this.doc?.getText().split('\n').findIndex((line) => line.trimEnd().endsWith(` ${lineContent}`));
-            if (lineIndex !== undefined && lineIndex !== -1) {
-                let line = this.doc?.lineAt(lineIndex);
-                if (line) {
-                    let selection = new vscode.Selection(line.range.start, line.range.start);
-                    if (vscode.window.activeTextEditor) {
-                        vscode.window.activeTextEditor.selection = selection;
-                        vscode.window.activeTextEditor.revealRange(new vscode.Range(selection.start, selection.end));
-                    }
-                }
-            }
-        }
-        
-
-        resetWatcherTimeout(){
-            // some filesystem changes can trigger onDidChange multiple times in quick succession
-            // we want to wait for a bit before updating the document content, otherwise we might do
-            // it multiple times in quick succession which causes some issues
-
-            this.cancelWatcherTimeout();
-            this.watcherHandleEventTimeout = setTimeout(async () => {
-                await updateDocContentToCurrentDir(this);
-            }, 100);
-        }
-
-        updateWatcher(){
-            if (this.watcher){
-                this.watcher.dispose();
-            }
-            this.watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(this.currentDirectory.fsPath, '*'));
-            this.watcher.onDidChange(async (e) => {
-                this.resetWatcherTimeout();
-            });
-            this.watcher.onDidDelete(async (e) => {
-                this.resetWatcherTimeout();
-            });
-            this.watcher.onDidCreate(async (e) => {
-                this.resetWatcherTimeout();
-            });
-        }
-
-        getTextEditor(){
-            return vscode.window.visibleTextEditors.find((editor) => editor.document === this.doc);
-        }
-
-        getFocusItem(){
-            let editor = this.getTextEditor();
-            let currentCursorLineIndex = editor?.selection.active.line;
-            if (currentCursorLineIndex !== undefined) {
-                return parseLine(this.doc.getText(this.doc.lineAt(currentCursorLineIndex).range));
-            }
-            return undefined;
-        }
-
-
-        getSelectedItems(){
-            let editor = this.getTextEditor();
-            let selectedItems: DirectoryListingData[] = [];
-            if (editor){
-                for (let selection of editor.selections){
-                    for (let i = selection.start.line; i <= selection.end.line; i++){
-                        let line = this.doc.getText(this.doc.lineAt(i).range);
-                        let item = parseLine(line);
-                        selectedItems.push(item);
-                    }
-                }
-            }
-            return selectedItems;
-        }
-
-        runShellCommandOnSelectedItems(cmd: string){
-            // if the command contains ${file}, we run it for each selected file
-            // if the command contains ${files}, we run it for all selected files at once
-
-            let isBatch = cmd.includes('${files}') || cmd.includes('${filenames}');
-            let items = this.getSelectedItems();
-            let rootDir: string = this.currentDir.path;
-
-            if (process.platform === "win32") {
-                rootDir = rootDir.slice(1);
-            }
-
-            const mapFilenameToPath = (filename: string) => {
-                let res = vscode.Uri.joinPath(this.currentDir!, filename).path;
-                if (res[0] == "/" && (process.platform === "win32")) {
-                    res = res.slice(1);
-                }
-                return res;
-            };
-
-            if (isBatch){
-                let filesString = items.map(({ name }) => mapFilenameToPath(name)).join(' ');
-                let fileNamesString = items.map(({ name }) => name).join(' ');
-
-                let batchCmd = cmd.replace('${files}', filesString);
-                batchCmd = batchCmd.replace('${filenames}', fileNamesString);
-                runShellCommand(batchCmd, rootDir);
-            }
-            else{
-                for (let { name } of items) {
-                    var fullPath = mapFilenameToPath(name);
-                    let commandToRun = cmd.replace('${file}', fullPath);
-                    commandToRun = commandToRun.replace('${filename}', name);
-                    runShellCommand(commandToRun, rootDir);
-                }
-            }
-        }
-
-        handleClose(){
-            if (this.watcher){
-                this.watcher.dispose();
-            }
-        }
-
-        get currentDir(){
-            return this.currentDirectory;
-        }
-
-        set currentDir(uri: vscode.Uri){
-            this.currentDirectory = uri;
-            this.updateWatcher();
-        }
-
-        async getFilesRecursive(rootUri: vscode.Uri, prefix: string='', ignoredPatterns: string[] = []): Promise<[string, vscode.FileType][]> {
-            let files = await vscode.workspace.fs.readDirectory(rootUri);
-            let res: [string, vscode.FileType][] = [];
-            let gitignoreFile = vscode.Uri.joinPath(rootUri, '.gitignore');
-            if (await vscode.workspace.fs.stat(gitignoreFile).then(() => true, () => false)){
-                let gitignoreContent = (await vscode.workspace.fs.readFile(gitignoreFile)).toString();
-                ignoredPatterns = ignoredPatterns.concat(gitignoreContent.split('\n').filter((line) => line.trim().length > 0));
-            }
-            for (let [name, type] of files){
-                if (ignoredPatterns.some((pattern) => name.includes(pattern))){
-                    continue;
-                }
-                if (type === vscode.FileType.Directory){
-                    if (IGNORED_DIRNAMES.includes(name)){
-                        continue;
-                    }
-                    
-                    let newPrefix = prefix + name + '/';
-                    let subFiles = await this.getFilesRecursive(vscode.Uri.joinPath(rootUri, name), newPrefix);
-                    res.push(...subFiles);
-                }
-                else{
-                    res.push([prefix + name, type]);
-                }
-                if (res.length > MAX_RECURSIVE_DIR_LISTING_SIZE){
-                    // alert the user that the listing is too large
-                    break;
-                }
-            }
-            return res;
-        }
-
-        async getContentForPath (rootUri: vscode.Uri, isPreview: boolean = false) {
-            let files = await vscode.workspace.fs.readDirectory(rootUri!);
-            if (!isPreview && this.showRecursive){
-                files = await this.getFilesRecursive(rootUri);
-            }
-            let content = '';
-
-            let fileNameToMetadata: Map<string, string> = new Map();
-            let fileNameToStats: Map<string, vscode.FileStat> = new Map();
-
-            let needsMetaString = this.showFileSize || this.showFileCreationDate;
-            let maxMetadataSize = 0;
-            if (needsMetaString || this.sortBy === SortBy.Size || this.sortBy === SortBy.CreationDate) {
-                for (let file of files) {
-                    let fullPath = vscode.Uri.joinPath(rootUri!, file[0]).path;
-                    if ((process.platform === "win32") && ILLEGAL_FILE_NAMES_ON_WINDOWS.includes(file[0])) {
-                        continue;
-                    }
-                    let stats = await vscode.workspace.fs.stat(vscode.Uri.parse(fullPath));
-                    fileNameToStats.set(file[0], stats);
-
-                    if (needsMetaString) {
-                        let metaString = '';
-                        let numSeparators = 0;
-
-                        const addSeparator = () => {
-                            if (metaString.length > 0) {
-                                metaString += '|';
-                                numSeparators += 1;
-                            }
-                        };
-
-                        if (this.showFileSize) {
-                            let fileSizeString = getFileSizeHumanReadableName(stats.size);
-                            addSeparator();
-                            metaString += fileSizeString;
-                        }
-                        if (this.showFileCreationDate) {
-                            let fileDateString = new Date(stats.mtime).toLocaleDateString();
-                            addSeparator();
-                            metaString += fileDateString;
-
-                        }
-                        // let metaString = `${fileDateString}|${fileSizeString}`;
-                        fileNameToMetadata.set(file[0], metaString);
-                        let metaDataSize = IDENTIFIER_SIZE + 8 + numSeparators + metaString.length;
-                        if (metaDataSize > maxMetadataSize) {
-                            maxMetadataSize = metaDataSize;
-                        }
-
-                    }
-                }
-            }
-
-
-            let sorter = fileNameSorter;
-            if (this.sortBy === SortBy.FileType) {
-                sorter = fileTypeSorter;
-            }
-            if (this.sortBy === SortBy.CreationDate) {
-                let statsSorter = (a: [string, vscode.FileType], b: [string, vscode.FileType]) => {
-                    let aStats = fileNameToStats.get(a[0]);
-                    let bStats = fileNameToStats.get(b[0]);
-                    if (aStats && bStats) {
-                        return aStats.ctime - bStats.ctime;
-                    }
-                    return 0;
-                };
-                sorter = statsSorter;
-            }
-            if (this.sortBy === SortBy.Size) {
-                let sizeSorter = (a: [string, vscode.FileType], b: [string, vscode.FileType]) => {
-                    let aStats = fileNameToStats.get(a[0]);
-                    let bStats = fileNameToStats.get(b[0]);
-                    if (aStats && bStats) {
-                        return aStats.size - bStats.size;
-                    }
-                    return 0;
-                };
-                sorter = sizeSorter;
-            }
-
-            if (!this.isAscending) {
-                let oldSorter = sorter;
-                sorter = (a: [string, vscode.FileType], b: [string, vscode.FileType]) => -oldSorter(a, b);
-            }
-
-            // first show directories and then files
-            files.sort(sorter);
-
-            content += `${PREVDIR_LINE}\n`;
-            for (let file of files) {
-
-                // we don't want to filter the content of previews
-                if (!isPreview){
-                    if (this.filterString && !file[0].includes(this.filterString)) {
-                        continue;
-                    }
-                }
-
-                let isDir = file[1] === vscode.FileType.Directory;
-                let fullPath = vscode.Uri.joinPath(rootUri!, file[0]).path;
-                let identifier = getIdentifierForPath(fullPath);
-                let meta = '';
-                if (this.showFileSize || this.showFileCreationDate) {
-                    meta = fileNameToMetadata.get(file[0]) ?? '';
-                    meta = METADATA_BEGIN_SYMBOL + meta + METADATA_END_SYMBOL;
-                }
-
-                let lineContent = '';
-                if (isDir) {
-                    lineContent = `${identifier} / ${meta}`;
-                }
-                else {
-                    lineContent = `${identifier} - ${meta}`;
-                }
-
-                if (isPreview){
-                    lineContent = '';
-                }
-
-                let dirPostfix = isDir ? '/' : '';
-                // pad line content to maxMetadataSize
-                lineContent = lineContent.padEnd(maxMetadataSize, ' ');
-                content += `/${lineContent}${file[0]}${dirPostfix}\n`;
-            }
-            return content;
-        }
-    }
-
-    const handleSave = vscode.commands.registerCommand('voil.handleSave', async () => {
+    const handleSave = vscode.commands.registerCommand('voil.save', async () => {
         let doc = await getVoilDocForActiveEditor();
         if (!doc) return;
         let originalContent = await doc.getContentForPath(doc.currentDir!);
@@ -1159,7 +1311,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    const handleEnter = vscode.commands.registerCommand('voil.handleEnter', async () => {
+    const handleEnter = vscode.commands.registerCommand('voil.enter', async () => {
         let doc = await getVoilDocForActiveEditor();
         if (!doc) return;
         // let activeEditor = doc.getTextEditor();
@@ -1202,137 +1354,6 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
     });
-    
-
-    const fileNameSorter = (a: [string, vscode.FileType], b: [string, vscode.FileType]) => {
-        let a_name = a[0];
-        let b_name = b[0];
-        if (a[1] !== vscode.FileType.Directory) {
-            // remove extension from file name
-            let a_parts = a_name.split('.');
-            let b_parts = b_name.split('.');
-            a_name = a_parts.length === 1 ? a_name : a_name.split('.').slice(0, -1).join('.');
-            b_name = b_parts.length === 1 ? b_name : b_name.split('.').slice(0, -1).join('.');
-        }
-
-        if (a[1] === b[1]) {
-            // compare file names. e.g. file1.txt should come before file10.txt even though lexicographically it should be the other way around
-            return a_name.localeCompare(b_name, undefined, { numeric: true });
-
-        }
-        return a[1] === vscode.FileType.Directory ? -1 : 1;
-    };
-
-    const fileTypeSorter = (a: [string, vscode.FileType], b: [string, vscode.FileType]) => {
-        if (a[1] === b[1] && (a[1] !== vscode.FileType.Directory)) {
-            let aHasExt = a[0].includes('.');
-            let bHasExt = b[0].includes('.');
-            let aExt = aHasExt ? a[0].split('.').slice(-1)[0] : '';
-            let bExt = bHasExt ? b[0].split('.').slice(-1)[0] : '';
-            if (aExt === bExt) {
-                return a[0].localeCompare(b[0]);
-            }
-            return aExt.localeCompare(bExt);
-        }
-        return fileNameSorter(a, b);
-    }
-
-
-    const getCutIdentifiersFromFileContents = (prevContentOnDisk: string, prevContentOnFile: string) => {
-        let diskIdentifiers = new Set<string>();
-        let fileIdentifiers = new Set<string>();
-
-        for (let line of prevContentOnDisk.split('\n')) {
-            let { identifier } = parseLine(line);
-            diskIdentifiers.add(identifier);
-        }
-
-        for (let line of prevContentOnFile.split('\n')) {
-            let { identifier } = parseLine(line);
-            fileIdentifiers.add(identifier);
-        }
-
-        let cutIds = new Set([...diskIdentifiers].filter(x => !fileIdentifiers.has(x)));
-        return cutIds;
-    };
-
-    const updateCutIdentifiers = async (doc: VoilDoc, prevContentOnDisk: string) => {
-        let prevContentOnFile = doc.doc.getText();
-
-        let cutIds = getCutIdentifiersFromFileContents(prevContentOnDisk, prevContentOnFile);
-        if (cutIds.size) {
-            cutIdentifiers = cutIds;
-        }
-    };
-
-    let updateDocContentToCurrentDir = async (doc: VoilDoc, prevDirectory: string | undefined = undefined) => {
-
-        let rootUri = doc.currentDir;
-        let content = await doc.getContentForPath(rootUri!);
-
-        if (prevDirectory){
-            let prevContentOnDisk = await doc.getContentForPath(vscode.Uri.parse(prevDirectory));
-            updateCutIdentifiers(doc, prevContentOnDisk);
-        }
-        let docTextEditor = doc.getTextEditor();
-
-        // why do we do two different things here?
-        // it is possible the the document doesn't have a text editor, so we need the second option for that case
-        // however, that does not work very well when there are multiple simulataneous updates (e.g. when a lot of files are being copied)
-        // so we have the first option as well
-        if (docTextEditor){
-            await docTextEditor.edit((editBuilder) => {
-                editBuilder.replace(new vscode.Range(
-                    docTextEditor.document.positionAt(0),
-                    docTextEditor.document.positionAt(docTextEditor.document.getText().length)
-                ), content);
-            });
-        }
-        else{
-
-            // set doc content
-            const edit = new vscode.WorkspaceEdit();
-            const fullRange = new vscode.Range(
-                doc.doc.positionAt(0),
-                doc.doc.positionAt(doc.doc.getText().length)
-            );
-            edit.replace(doc.doc.uri, fullRange, content);
-            await vscode.workspace.applyEdit(edit);
-
-        }
-        if (hideIdentifier){
-            setTimeout(() => {
-                // the changes in vscode.workspace.applyEdit are not immediately reflected in the document
-                // so we need to wait for a bit before applying the identifier decoration, this is a bit hacky
-                // so if anyone knows a better way to do this, please let me know
-                applyIdentifierDecoration(docTextEditor, docTextEditor?.document);
-            }, 50);
-        }
-
-    };
-
-    const handleStartVoil = async (doc: VoilDoc, initialUri: vscode.Uri, fileToFocus: string | undefined = undefined) => {
-        // doc.currentDir = vscode.workspace.workspaceFolders?.[0].uri!;
-        doc.currentDir = initialUri;
-        await updateDocContentToCurrentDir(doc);
-
-        await vscode.window.showTextDocument(doc.doc);
-        // move cursor to the first line
-        let selection = new vscode.Selection(doc.doc.positionAt(0), doc.doc.positionAt(0));
-        if (fileToFocus){
-            let lineIndex = doc.doc.getText().split('\n').findIndex((line) => line.trimEnd().endsWith(fileToFocus));
-            if (lineIndex !== undefined && lineIndex !== -1){
-                let line = doc.doc.lineAt(lineIndex);
-                selection = new vscode.Selection(line.range.start, line.range.start);
-            }
-        }
-
-        if (vscode.window.activeTextEditor){
-            vscode.window.activeTextEditor.selection = selection;
-        }
-
-        vscode.commands.executeCommand('setContext', 'voilDoc', true);
-    };
 
     const openVoilDoc = vscode.commands.registerCommand('voil.openPanel', async () => {
         let doc = await newVoilDoc();
@@ -1347,17 +1368,6 @@ export function activate(context: vscode.ExtensionContext) {
 
     });
 
-    const runShellCommand = (cmd: string, rootDir: string) => {
-        const exec = require('child_process').exec;
-        exec(cmd, {cwd: rootDir}, (error: any, stdout: any, stderr: any) => {
-            if (error) {
-                console.error(`exec error: ${error}`);
-                return;
-            }
-            console.log(`stdout: ${stdout}`);
-            console.error(`stderr: ${stderr}`);
-        });
-    };
 
     const openVoilDocCurrentDir = vscode.commands.registerCommand('voil.openPanelCurrentDir', async () => {
         let doc = await newVoilDoc();
@@ -1391,25 +1401,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     });
 
-    const getVoilDocForEditor = (activeEditor: vscode.TextEditor | undefined) => {
-        if (activeEditor) {
-            let doc = voilDocs.find((doc) => doc.doc === activeEditor?.document);
-            if (doc) {
-                return doc;
-            }
-        }
-        if (voilPanel){
-            if (voilPanel.doc === activeEditor?.document){
-                return voilPanel;
-            }
-        }
-        return undefined;
-    };
 
-    const getVoilDocForActiveEditor = async () => {
-        let activeEditor = vscode.window.activeTextEditor;
-        return getVoilDocForEditor(activeEditor);
-    }
 
     let lastFocusedEditor: vscode.TextEditor | undefined = undefined;
 
@@ -1421,7 +1413,6 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(startVoilCommand);
     context.subscriptions.push(startVoilCommandCurrentDir);
     context.subscriptions.push(openVoilDocCurrentDir);
-    context.subscriptions.push(togglePreview);
     context.subscriptions.push(runShellCommandOnSelectionCommand);
     context.subscriptions.push(runShellCommandWithIdOnSelectionCommand);
     context.subscriptions.push(toggleFileSizeCommand);
