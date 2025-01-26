@@ -973,6 +973,73 @@ const handleStartVoil = async (doc: VoilDoc, initialUri: vscode.Uri, fileToFocus
     vscode.commands.executeCommand('setContext', 'voilDoc', true);
 };
 
+const getModificationsFromContentDiff = (doc: VoilDoc, oldContent: string, newContent: string) => {
+    var originalIdentifiers: Map<string, DirectoryListingData[]> = getIdentifiersFromContent(oldContent);
+    var newIdentifiers: Map<string, DirectoryListingData[]> = getIdentifiersFromContent(newContent);
+
+    var copiedIdentifiers: Map<string, DirectoryListingData[]> = new Map();
+    var movedIdentifiers: Map<string, RenamedDirectoryListingItem> = new Map();
+    var renamedIdentifiers: Map<string, RenamedDirectoryListingItem> = new Map();
+    var deletedIdentifiers: Map<string, DirectoryListingData[]> = new Map();
+
+    for (let [identifier, items] of newIdentifiers) {
+        let originalPath = getPathForIdentifier(identifier);
+        let originalParentPath = getPathParts(originalPath).slice(0, -1).join('/');
+        // let isCurrentDirTheSameAsOriginal = doc.showRecursive || (doc.currentDir?.path === originalParentPath);
+        let isCurrentDirTheSameAsOriginal = doc.showRecursive || isSamePath(doc.currentDir?.path, originalParentPath);
+        let newItems: DirectoryListingData[] = [];
+        let originalExists = false;
+
+        for (let item of items) {
+            let itemName = item.name;
+            if (item.isDir && itemName.endsWith("/")) {
+                itemName = itemName.slice(0, -1);
+            }
+            let itemPath = vscode.Uri.joinPath(doc.currentDir!, itemName).path;
+            if (originalPath && originalPath !== itemPath) {
+                newItems.push(item);
+            }
+            else {
+                originalExists = true;
+            }
+        }
+
+        if (isCurrentDirTheSameAsOriginal) {
+
+            if (!originalExists && newItems.length > 0 && originalPath) {
+                renamedIdentifiers.set(identifier, new RenamedDirectoryListingItem(originalPath, newItems[0]));
+                newItems = newItems.slice(1);
+            }
+
+            if (newItems.length > 0) {
+                copiedIdentifiers.set(identifier, newItems);
+            }
+        }
+        else {
+            if (newItems.length > 0) {
+                if (cutIdentifiers.has(identifier)) {
+                    let firstItem = newItems[0];
+                    let rest = newItems.slice(1);
+                    movedIdentifiers.set(identifier, new RenamedDirectoryListingItem(originalPath!, firstItem));
+                    if (rest.length > 0) {
+                        copiedIdentifiers.set(identifier, rest);
+                    }
+                }
+                else {
+                    copiedIdentifiers.set(identifier, newItems);
+                }
+            }
+        }
+    }
+
+    for (let [identifier, obj] of originalIdentifiers) {
+        if (!newIdentifiers.has(identifier)) {
+            deletedIdentifiers.set(identifier, obj);
+        }
+    }
+    return { copiedIdentifiers, movedIdentifiers, renamedIdentifiers, deletedIdentifiers };
+}
+
 export function activate(context: vscode.ExtensionContext) {
     // var currentDir = vscode.workspace.workspaceFolders?.[0].uri;
 
@@ -1095,67 +1162,14 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
+
     const handleSave = vscode.commands.registerCommand('voil.save', async () => {
         let doc = await getVoilDocForActiveEditor();
         if (!doc) return;
         let originalContent = await doc.getContentForPath(doc.currentDir!);
-        var originalIdentifiers: Map<string, DirectoryListingData[]> = getIdentifiersFromContent(originalContent);
         let content = doc.doc.getText();
-        var newIdentifiers: Map<string, DirectoryListingData[]> = getIdentifiersFromContent(content);
 
-        var copiedIdentifiers: Map<string, DirectoryListingData[]> = new Map();
-        var movedIdentifiers: Map<string, RenamedDirectoryListingItem> = new Map();
-        var renamedIdentifiers: Map<string, RenamedDirectoryListingItem> = new Map();
-
-        for (let [identifier, items] of newIdentifiers){
-            let originalPath = getPathForIdentifier(identifier);
-            let originalParentPath = getPathParts(originalPath).slice(0, -1).join('/');
-            // let isCurrentDirTheSameAsOriginal = doc.showRecursive || (doc.currentDir?.path === originalParentPath);
-            let isCurrentDirTheSameAsOriginal = doc.showRecursive || isSamePath(doc.currentDir?.path, originalParentPath);
-            let newItems: DirectoryListingData[] = [];
-            let originalExists = false;
-
-            for (let item of items){
-                let itemName = item.name;
-                if (item.isDir && itemName.endsWith("/")){
-                    itemName = itemName.slice(0, -1);
-                }
-                let itemPath = vscode.Uri.joinPath(doc.currentDir!, itemName).path;
-                if (originalPath && originalPath !== itemPath){
-                    newItems.push(item);
-                }
-                else{
-                    originalExists = true;
-                }
-            }
-
-            if (isCurrentDirTheSameAsOriginal){
-
-                if (!originalExists && newItems.length > 0 && originalPath) {
-                    renamedIdentifiers.set(identifier, new RenamedDirectoryListingItem(originalPath, newItems[0]));
-                    newItems = newItems.slice(1);
-                }
-
-                if (newItems.length > 0) {
-                    copiedIdentifiers.set(identifier, newItems);
-                }
-            }
-            else{
-                if (newItems.length > 0){
-                    if (cutIdentifiers.has(identifier)){
-                        let firstItem = newItems[0];
-                        let rest = newItems.slice(1);
-                        movedIdentifiers.set(identifier, new RenamedDirectoryListingItem(originalPath!, firstItem));
-                        if (rest.length > 0){
-                            copiedIdentifiers.set(identifier, rest);
-                        }
-                    }
-                    else{
-                        copiedIdentifiers.set(identifier, newItems);
-                    }
-                }
-            }
-        }
+        let { copiedIdentifiers, movedIdentifiers, renamedIdentifiers, deletedIdentifiers } = getModificationsFromContentDiff(doc, originalContent, content);
 
 
         let newNames : string[] = [];
@@ -1173,15 +1187,6 @@ export function activate(context: vscode.ExtensionContext) {
                 }
             }
         }
-
-
-        var deletedIdentifiers: Map<string, DirectoryListingData[]> = new Map();
-        for (let [identifier, obj] of originalIdentifiers){
-            if (!newIdentifiers.has(identifier)){
-                deletedIdentifiers.set(identifier, obj);
-            }
-        }
-
 
         if (deletedIdentifiers.size > 0 || renamedIdentifiers.size > 0 || movedIdentifiers.size > 0){
             let response = await showDeleteConfirmation(deletedIdentifiers, renamedIdentifiers, movedIdentifiers);
