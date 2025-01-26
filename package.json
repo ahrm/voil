@@ -101,6 +101,10 @@
         "title": "voil: toggle sort order"
       },
       {
+        "command": "voil.cd",
+        "title": "voil: set the current directory"
+      },
+      {
         "command": "voil.runShellCommandOnSelection",
         "title": "voil: run shell command on selected items"
       },
