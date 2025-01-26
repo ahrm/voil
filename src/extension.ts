@@ -1335,6 +1335,13 @@ export function activate(context: vscode.ExtensionContext) {
     const handleEnter = vscode.commands.registerCommand('voil.enter', async () => {
         let doc = await getVoilDocForActiveEditor();
         if (!doc) return;
+
+        // disable recursive listing when chaging documents
+        // for example going to a large parent document while recursive
+        // listing is enabled can cause performance problems, if the user
+        // really needs recursive listing they can re-enable it
+        doc.showRecursive = false;
+
         // let activeEditor = doc.getTextEditor();
         let currentCursorLineIndex = vscode.window.activeTextEditor?.selection.active.line;
         let prevDirectory = doc.currentDir?.path;
