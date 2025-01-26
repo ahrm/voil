@@ -1428,6 +1428,19 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(openCurrentDirectory);
 
     context.subscriptions.push(
+        vscode.workspace.onDidCloseTextDocument(async (doc) => {
+            if (doc.uri.fsPath.endsWith('.voil')) {
+                let voil = voilDocs.find((v) => v.doc === doc);
+                if (voil) {
+                    voilDocs = voilDocs.filter((v) => v !== voil);
+                    if (voil.watcher){
+                        voil.watcher.dispose();
+                    }
+                }
+            }
+        })
+    );
+    context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor(async (editor) => {
 
             vscode.commands.executeCommand('setContext', 'voilDoc', editor?.document.uri.fsPath.endsWith('.voil'));
