@@ -66,6 +66,7 @@ let config = vscode.workspace.getConfiguration('voil');
 let previewEnabled = config.get<boolean>('previewAutoOpen') ?? false;
 let allowFocusOnIdentifier = config.get<boolean>('allowFocusOnIdentifier') ?? false;
 let hideIdentifier = config.get<boolean>('hideIdentifier') ?? true;
+let recursiveListingMaxDepth = config.get<number>('recursiveListingMaxDepth') ?? 10;
 let customShellCommands_ = config.get<CustomShellCommand[]>('customShellCommands');
 let customShellCommands = customShellCommands_?.map((cmd) => new CustomShellCommand(cmd.name, cmd.id, cmd.cmd));
 var savedEditorLayout: SavedEditorLayout | undefined = undefined;
@@ -579,7 +580,11 @@ class VoilDoc {
         this.updateWatcher();
     }
 
-    async getFilesRecursive(rootUri: vscode.Uri, prefix: string = '', ignoredPatterns: RegExp[] = [], currentSize: number = 0): Promise<[string, vscode.FileType][]> {
+    async getFilesRecursive(rootUri: vscode.Uri, prefix: string = '', ignoredPatterns: RegExp[] = [], currentSize: number = 0, depth: number | undefined = undefined): Promise<[string, vscode.FileType][]> {
+        if (depth == undefined){
+            depth = recursiveListingMaxDepth;
+        }
+
         let files = await vscode.workspace.fs.readDirectory(rootUri);
         let res: [string, vscode.FileType][] = [];
         let gitignoreFile = vscode.Uri.joinPath(rootUri, '.gitignore');
@@ -601,10 +606,16 @@ class VoilDoc {
                     continue;
                 }
 
-                let newPrefix = prefix + name + '/';
-                let subFiles = await this.getFilesRecursive(vscode.Uri.joinPath(rootUri, name), newPrefix, ignoredPatterns, currentSize);
-                res.push(...subFiles);
-                currentSize += subFiles.length;
+                if (depth > 0) {
+                    let newPrefix = prefix + name + '/';
+                    let subFiles = await this.getFilesRecursive(vscode.Uri.joinPath(rootUri, name), newPrefix, ignoredPatterns, currentSize, depth - 1);
+                    res.push(...subFiles);
+                    currentSize += subFiles.length;
+                }
+                else{
+                    res.push([prefix + name, type]);
+                    currentSize += 1;
+                }
             }
             else {
                 currentSize += 1;
@@ -1043,6 +1054,7 @@ export function activate(context: vscode.ExtensionContext) {
         hideIdentifier = config.get<boolean>('hideIdentifier') ?? true;
         customShellCommands_ = config.get<CustomShellCommand[]>('customShellCommands');
         customShellCommands = customShellCommands_?.map((cmd) => new CustomShellCommand(cmd.name, cmd.id, cmd.cmd));
+        recursiveListingMaxDepth = config.get<number>('recursiveListingMaxDepth') ?? 10;
     });
 
     const runShellCommandOnSelectionCommand = vscode.commands.registerCommand('voil.runShellCommandOnSelection', async () => {

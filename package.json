@@ -206,6 +206,11 @@
           "default": true,
           "description": "Hide the file identifiers in the voil window."
         },
+        "voil.recursiveListingMaxDepth": {
+          "type": "number",
+          "default": 10,
+          "description": "Maximum depth of folders in recursive listing."
+        },
         "voil.customShellCommands": {
           "type": "array",
           "default": [],
