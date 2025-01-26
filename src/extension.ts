@@ -10,6 +10,7 @@ const ILLEGAL_FILE_NAMES_ON_WINDOWS = [
     "$RECYCLE.BIN",
     "DumpStack.log.tmp"
 ];
+
 const MAX_RECURSIVE_DIR_LISTING_SIZE = 100000;
 const IGNORED_DIRNAMES = [
     ".git",
