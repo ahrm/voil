@@ -758,11 +758,12 @@ class VoilDoc {
 
 let filterStatusBarItem: vscode.StatusBarItem;
 
+const hideIdentifierDecoration = vscode.window.createTextEditorDecorationType({
+    textDecoration: 'none; font-size: 0pt',
+    rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
+});
+
 const applyIdentifierDecoration = (editor: vscode.TextEditor | undefined, doc: vscode.TextDocument | undefined) => {
-    const hideIdentifierDecoration = vscode.window.createTextEditorDecorationType({
-        textDecoration: 'none; font-size: 0pt',
-        rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
-    });
     editor = editor ?? vscode.window.activeTextEditor;
     if (!editor) return;
     doc = doc ?? editor.document;
