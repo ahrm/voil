@@ -1,141 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 
-// taken from https://github.com/fitzgen/glob-to-regexp/blob/master/index.js
-let globToRegex = (glob: string) => {
-    if (glob.endsWith("/")){
-        glob = glob + "**";
-    }
+import * as utils from './utils';
 
-    if (typeof glob !== 'string') {
-        throw new TypeError('Expected a string');
-    }
-
-    var str = String(glob);
-
-    // The regexp we are building, as a string.
-    var reStr = "";
-
-    // Whether we are matching so called "extended" globs (like bash) and should
-    // support single character matching, matching ranges of characters, group
-    // matching, etc.
-    var extended = true;
-
-    // When globstar is _false_ (default), '/foo/*' is translated a regexp like
-    // '^\/foo\/.*$' which will match any string beginning with '/foo/'
-    // When globstar is _true_, '/foo/*' is translated to regexp like
-    // '^\/foo\/[^/]*$' which will match any string beginning with '/foo/' BUT
-    // which does not have a '/' to the right of it.
-    // E.g. with '/foo/*' these will match: '/foo/bar', '/foo/bar.txt' but
-    // these will not '/foo/bar/baz', '/foo/bar/baz.txt'
-    // Lastely, when globstar is _true_, '/foo/**' is equivelant to '/foo/*' when
-    // globstar is _false_
-    var globstar = false;
-
-    // If we are doing extended matching, this boolean is true when we are inside
-    // a group (eg {*.html,*.js}), and false otherwise.
-    var inGroup = false;
-
-    // RegExp flags (eg "i" ) to pass in to RegExp constructor.
-    var flags = "";
-
-    var c;
-    for (var i = 0, len = str.length; i < len; i++) {
-        c = str[i];
-
-        switch (c) {
-            case "/":
-            case "$":
-            case "^":
-            case "+":
-            case ".":
-            case "(":
-            case ")":
-            case "=":
-            case "!":
-            case "|":
-                reStr += "\\" + c;
-                break;
-
-            case "?":
-                if (extended) {
-                    reStr += ".";
-                    break;
-                }
-
-            case "[":
-            case "]":
-                if (extended) {
-                    reStr += c;
-                    break;
-                }
-
-            case "{":
-                if (extended) {
-                    inGroup = true;
-                    reStr += "(";
-                    break;
-                }
-
-            case "}":
-                if (extended) {
-                    inGroup = false;
-                    reStr += ")";
-                    break;
-                }
-
-            case ",":
-                if (inGroup) {
-                    reStr += "|";
-                    break;
-                }
-                reStr += "\\" + c;
-                break;
-
-            case "*":
-                // Move over all consecutive "*"'s.
-                // Also store the previous and next characters
-                var prevChar = str[i - 1];
-                var starCount = 1;
-                while (str[i + 1] === "*") {
-                    starCount++;
-                    i++;
-                }
-                var nextChar = str[i + 1];
-
-                if (!globstar) {
-                    // globstar is disabled, so treat any number of "*" as one
-                    reStr += ".*";
-                } else {
-                    // globstar is enabled, so determine if this is a globstar segment
-                    var isGlobstar = starCount > 1                      // multiple "*"'s
-                        && (prevChar === "/" || prevChar === undefined)   // from the start of the segment
-                        && (nextChar === "/" || nextChar === undefined)   // to the end of the segment
-
-                    if (isGlobstar) {
-                        // it's a globstar, so match zero or more path segments
-                        reStr += "((?:[^/]*(?:\/|$))*)";
-                        i++; // move over the "/"
-                    } else {
-                        // it's not a globstar, so only match one path segment
-                        reStr += "([^/]*)";
-                    }
-                }
-                break;
-
-            default:
-                reStr += c;
-        }
-    }
-
-    // When regexp 'g' flag is specified don't
-    // constrain the regular expression with ^ & $
-    if (!flags || !~flags.indexOf('g')) {
-        reStr = "^" + reStr + "$";
-    }
-
-    return new RegExp(reStr, flags);
-};
 const IDENTIFIER_SIZE = 7;
 const METADATA_BEGIN_SYMBOL = "/[";
 const METADATA_END_SYMBOL = "]/";
@@ -150,15 +17,6 @@ const MAX_RECURSIVE_DIR_LISTING_SIZE = 10000;
 const IGNORED_DIRNAMES = [
     ".git",
 ]
-
-const getPathParts = (path: string | undefined) => {
-    if (path === undefined) return [];
-    return path.split('/').filter((part, index) => (index === 0) || (part.length > 0));
-}
-
-const isSamePath =(path1: string, path2: string) => {
-    return path.relative(path1, path2) === '';
-}
 
 class CustomShellCommand{
     name: string;
@@ -237,15 +95,6 @@ class RenamedDirectoryListingItem{
     }
 }
 
-function getFileSizeHumanReadableName(sizeInBytes: number) {
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    let unitIndex = 0;
-    while (sizeInBytes >= 1024 && unitIndex < units.length - 1) {
-        sizeInBytes /= 1024;
-        unitIndex++;
-    }
-    return `${sizeInBytes.toFixed(0)} ${units[unitIndex]}`;
-}
 
 async function showDeleteConfirmation(
     deletedIdentifiers: Map<string, DirectoryListingData[]>,
@@ -740,7 +589,7 @@ class VoilDoc {
                 gitignoreContent.split('\n')
                 .filter((line) => line.trim().length > 0)
                 .filter((line) => !line.startsWith("#"))
-                .map((line) => globToRegex(line.trim()))
+                .map((line) => utils.globToRegex(line.trim()))
             );
         }
         for (let [name, type] of files) {
@@ -802,7 +651,7 @@ class VoilDoc {
                     };
 
                     if (this.showFileSize) {
-                        let fileSizeString = getFileSizeHumanReadableName(stats.size);
+                        let fileSizeString = utils.getFileSizeHumanReadableName(stats.size);
                         addSeparator();
                         metaString += fileSizeString;
                     }
@@ -1127,9 +976,9 @@ const getModificationsFromContentDiff = (doc: VoilDoc, oldContent: string, newCo
 
     for (let [identifier, items] of newIdentifiers) {
         let originalPath = getPathForIdentifier(identifier);
-        let originalParentPath = getPathParts(originalPath).slice(0, -1).join('/');
+        let originalParentPath = utils.getPathParts(originalPath).slice(0, -1).join('/');
         // let isCurrentDirTheSameAsOriginal = doc.showRecursive || (doc.currentDir?.path === originalParentPath);
-        let isCurrentDirTheSameAsOriginal = doc.showRecursive || isSamePath(doc.currentDir?.path, originalParentPath);
+        let isCurrentDirTheSameAsOriginal = doc.showRecursive || utils.isSamePath(doc.currentDir?.path, originalParentPath);
         let newItems: DirectoryListingData[] = [];
         let originalExists = false;
 
@@ -1418,8 +1267,8 @@ export function activate(context: vscode.ExtensionContext) {
             if (newNames.length > 0){
                 let focusString = newNames[0];
                 if (!doc.showRecursive){
-                    let nameParts = getPathParts(newNames[0]);
-                    let firstPathPart = getPathParts(newNames[0])[0];
+                    let nameParts = utils.getPathParts(newNames[0]);
+                    let firstPathPart = utils.getPathParts(newNames[0])[0];
                     if (nameParts.length > 1 || newNames[0].endsWith('/')){
                         firstPathPart = firstPathPart + '/';
                     }
@@ -1486,7 +1335,7 @@ export function activate(context: vscode.ExtensionContext) {
                 doc.filterString = '';
                 if (currentDirName === '..') {
                     // focusline should be the last part of current path
-                    let pathParts = getPathParts(doc.currentDir?.path);
+                    let pathParts = utils.getPathParts(doc.currentDir?.path);
                     focusLine = pathParts?.[pathParts.length - 1] ?? '';
                     doc.currentDir = vscode.Uri.joinPath(doc.currentDir!, '..');
                 }
@@ -1698,7 +1547,7 @@ export function activate(context: vscode.ExtensionContext) {
                             // show some general information, e.g. file size etc. in the preview window
                             let fileUri = vscode.Uri.joinPath(doc.currentDir!, name);
                             let stats = await vscode.workspace.fs.stat(fileUri);
-                            let content = `Size:\t\t\t${getFileSizeHumanReadableName(stats.size)}\n`;
+                            let content = `Size:\t\t\t${utils.getFileSizeHumanReadableName(stats.size)}\n`;
                             content += `Modified:\t\t${new Date(stats.mtime).toLocaleString()}\n`;
                             content += `Created:\t\t${new Date(stats.ctime).toLocaleString()}\n`;
                             let newdoc = await getPreviewDoc();
