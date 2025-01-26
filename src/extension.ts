@@ -11,7 +11,7 @@ const ILLEGAL_FILE_NAMES_ON_WINDOWS = [
     "DumpStack.log.tmp"
 ];
 
-const MAX_RECURSIVE_DIR_LISTING_SIZE = 100000;
+const MAX_RECURSIVE_DIR_LISTING_SIZE = 10000;
 const IGNORED_DIRNAMES = [
     ".git",
 ]
@@ -595,7 +595,7 @@ class VoilDoc {
         this.updateWatcher();
     }
 
-    async getFilesRecursive(rootUri: vscode.Uri, prefix: string = '', ignoredPatterns: string[] = []): Promise<[string, vscode.FileType][]> {
+    async getFilesRecursive(rootUri: vscode.Uri, prefix: string = '', ignoredPatterns: string[] = [], currentSize: number = 0): Promise<[string, vscode.FileType][]> {
         let files = await vscode.workspace.fs.readDirectory(rootUri);
         let res: [string, vscode.FileType][] = [];
         let gitignoreFile = vscode.Uri.joinPath(rootUri, '.gitignore');
@@ -613,14 +613,16 @@ class VoilDoc {
                 }
 
                 let newPrefix = prefix + name + '/';
-                let subFiles = await this.getFilesRecursive(vscode.Uri.joinPath(rootUri, name), newPrefix);
+                let subFiles = await this.getFilesRecursive(vscode.Uri.joinPath(rootUri, name), newPrefix, ignoredPatterns, currentSize);
                 res.push(...subFiles);
+                currentSize += subFiles.length;
             }
             else {
+                currentSize += 1;
                 res.push([prefix + name, type]);
             }
-            if (res.length > MAX_RECURSIVE_DIR_LISTING_SIZE) {
-                // alert the user that the listing is too large
+            if (currentSize > MAX_RECURSIVE_DIR_LISTING_SIZE) {
+                // maybe alert the user that the listing is too large
                 break;
             }
         }
