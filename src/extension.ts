@@ -305,12 +305,12 @@ let updateDocContentToCurrentDir = async (doc: VoilDoc, prevDirectory: string | 
         await vscode.workspace.applyEdit(edit);
 
     }
-    if (hideIdentifier) {
+    if (hideIdentifier && docTextEditor) {
         setTimeout(() => {
             // the changes in vscode.workspace.applyEdit are not immediately reflected in the document
             // so we need to wait for a bit before applying the identifier decoration, this is a bit hacky
             // so if anyone knows a better way to do this, please let me know
-            applyIdentifierDecoration(docTextEditor, docTextEditor?.document);
+            applyIdentifierDecoration(docTextEditor, docTextEditor.document);
         }, 50);
     }
 
@@ -488,9 +488,6 @@ class VoilDoc {
             this.watcher.dispose();
         }
         this.watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(this.currentDirectory.fsPath, '*'));
-        this.watcher.onDidChange(async (e) => {
-            this.resetWatcherTimeout();
-        });
         this.watcher.onDidDelete(async (e) => {
             this.resetWatcherTimeout();
         });
@@ -767,10 +764,7 @@ const hideIdentifierDecoration = vscode.window.createTextEditorDecorationType({
     rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
 });
 
-const applyIdentifierDecoration = (editor: vscode.TextEditor | undefined, doc: vscode.TextDocument | undefined) => {
-    editor = editor ?? vscode.window.activeTextEditor;
-    if (!editor) return;
-    doc = doc ?? editor.document;
+const applyIdentifierDecoration = (editor: vscode.TextEditor, doc: vscode.TextDocument) => {
     let decorations: vscode.DecorationOptions[] = [];
     let renderOptions: vscode.DecorationRenderOptions = {
         after: {},
@@ -1510,8 +1504,8 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             let isPreviewWindow = editor?.document.uri.fsPath.endsWith(':preview.voil');
-            if (!isPreviewWindow && hideIdentifier){
-                applyIdentifierDecoration(editor, editor?.document);
+            if (!isPreviewWindow && hideIdentifier && (doc !== undefined) && (editor !== undefined)) {
+                applyIdentifierDecoration(editor, editor.document);
             }
 
         })
@@ -1519,7 +1513,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         vscode.workspace.onDidChangeTextDocument(async (event) => {
-            if (hideIdentifier){
+            if (hideIdentifier && (event.document === vscode.window.activeTextEditor?.document)){
                 let isVoil = event.document.uri.fsPath.endsWith('.voil') && !event.document.uri.fsPath.endsWith(':preview.voil');
                 if (isVoil){
                     applyIdentifierDecoration(vscode.window.activeTextEditor, event.document);
