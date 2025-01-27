@@ -1305,8 +1305,28 @@ export function activate(context: vscode.ExtensionContext) {
         if (voil){
             let dir = await vscode.window.showInputBox({ prompt: 'Enter directory to go to' });
             if (dir){
-                voil.currentDir = vscode.Uri.parse('/' + dir);
-                await updateDocContentToCurrentDir(voil);
+                let targetDir = dir;
+
+                if ("win32" === process.platform){
+                    targetDir = '/' + dir;
+                }
+                else{
+                    if (targetDir.startsWith("~")){
+                        let homedir = process.env.HOME;
+                        targetDir = homedir + targetDir.slice(1);
+                    }
+                }
+
+                let oldDir = voil.currentDir;
+                try{
+                    voil.currentDir = vscode.Uri.parse(targetDir);
+                    await updateDocContentToCurrentDir(voil);
+                }
+                catch (e){
+                    voil.currentDir = oldDir;
+                    await vscode.window.showErrorMessage("Invalid directory");
+                    await updateDocContentToCurrentDir(voil);
+                }
             }
         }
     });
