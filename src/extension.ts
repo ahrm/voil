@@ -1381,6 +1381,11 @@ export function activate(context: vscode.ExtensionContext) {
                 // open file
                 let fileUri = vscode.Uri.joinPath(doc.currentDir!, currentDirName!);
                 let newdoc = await vscode.workspace.openTextDocument(fileUri);
+
+                // if we don't close the voil windows, vscode will show an annoying "do you want to save changes" dialog
+                voilDocs = voilDocs.filter((d) => d !== doc);
+                await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+                
                 await vscode.window.showTextDocument(newdoc);
                 if (doc.hasPreview){
                     await hidePreviewWindow();
