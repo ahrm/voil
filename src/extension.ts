@@ -1267,13 +1267,14 @@ export function activate(context: vscode.ExtensionContext) {
 
             let { identifier, isDir, name, isNew } = parseLine(line);
             if (isNew) {
-                let fullPath = vscode.Uri.joinPath(doc.currentDir!, name + "/");
                 if (isDir) {
+                    let fullPath = vscode.Uri.joinPath(doc.currentDir!, name + "/");
                     await vscode.workspace.fs.createDirectory(fullPath);
                     newNames.push(name);
                     modified = true;
                 }
                 else {
+                    let fullPath = vscode.Uri.joinPath(doc.currentDir!, name);
                     await vscode.workspace.fs.writeFile(fullPath, new Uint8Array());
                     newNames.push(name);
                     modified = true;
@@ -1404,6 +1405,7 @@ export function activate(context: vscode.ExtensionContext) {
 
                 // if we don't close the voil windows, vscode will show an annoying "do you want to save changes" dialog
                 voilDocs = voilDocs.filter((d) => d !== doc);
+                doc.handleClose();
                 await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
                 
                 await vscode.window.showTextDocument(newdoc);
