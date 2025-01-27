@@ -143,6 +143,11 @@
         "command": "voil.enter",
         "key": "ctrl+enter",
         "when": "editorTextFocus && voilDoc && (!vim.active)"
+      },
+      {
+        "command": "voil.openCurrentDirectory",
+        "key": "f5",
+        "when": "editorTextFocus && voilDoc"
       }
     ],
     "configurationDefaults": {
