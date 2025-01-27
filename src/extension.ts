@@ -68,6 +68,7 @@ let allowFocusOnIdentifier = config.get<boolean>('allowFocusOnIdentifier') ?? fa
 let hideIdentifier = config.get<boolean>('hideIdentifier') ?? true;
 let recursiveListingMaxDepth = config.get<number>('recursiveListingMaxDepth') ?? 10;
 let customShellCommands_ = config.get<CustomShellCommand[]>('customShellCommands');
+let trashDirectory = config.get<string>('trashDirectory') ?? "";
 let customShellCommands = customShellCommands_?.map((cmd) => new CustomShellCommand(cmd.name, cmd.id, cmd.cmd));
 var savedEditorLayout: SavedEditorLayout | undefined = undefined;
 
@@ -1054,6 +1055,7 @@ export function activate(context: vscode.ExtensionContext) {
         hideIdentifier = config.get<boolean>('hideIdentifier') ?? true;
         customShellCommands_ = config.get<CustomShellCommand[]>('customShellCommands');
         customShellCommands = customShellCommands_?.map((cmd) => new CustomShellCommand(cmd.name, cmd.id, cmd.cmd));
+        trashDirectory = config.get<string>('trashDirectory') ?? "";
         recursiveListingMaxDepth = config.get<number>('recursiveListingMaxDepth') ?? 10;
     });
 
@@ -1201,11 +1203,22 @@ export function activate(context: vscode.ExtensionContext) {
                     // delete the file/directory
                     let path = getPathForIdentifier(identifier);
                     if (path){
-                        if (isDir) {
-                            await vscode.workspace.fs.delete(vscode.Uri.parse(path), { recursive: true });
+                        if (trashDirectory.length > 0){
+                            let uniqueName = name + '-' + Date.now();
+                            if (isDir){
+                                uniqueName = name.slice(0, -1) + '-' + Date.now() + '/';
+                            }
+
+                            let trashPath = vscode.Uri.joinPath(vscode.Uri.file(trashDirectory), uniqueName);
+                            await vscode.workspace.fs.rename(vscode.Uri.parse(path), trashPath);
                         }
-                        else {
-                            await vscode.workspace.fs.delete(vscode.Uri.parse(path));
+                        else{
+                            if (isDir) {
+                                await vscode.workspace.fs.delete(vscode.Uri.parse(path), { recursive: true });
+                            }
+                            else {
+                                await vscode.workspace.fs.delete(vscode.Uri.parse(path));
+                            }
                         }
 
                         pathToIdentifierMap.delete(path);

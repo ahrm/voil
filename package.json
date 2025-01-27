@@ -206,6 +206,11 @@
           "default": true,
           "description": "Hide the file identifiers in the voil window."
         },
+        "voil.trashDirectory": {
+          "type": "string",
+          "default": "",
+          "description": "If set, files will be moved to this directory when deleted."
+        },
         "voil.recursiveListingMaxDepth": {
           "type": "number",
           "default": 10,
