@@ -892,6 +892,15 @@ let getVoilDoc = async () => {
     return res;
 };
     
+let getCurrentUri = () => {
+    let workspaceUri = vscode.workspace.workspaceFolders?.[0].uri;
+    if (workspaceUri){
+        return workspaceUri;
+    }
+    let fileUri = vscode.window.activeTextEditor?.document.uri;
+    return fileUri
+}
+
 let newVoilDoc = async () => {
     let nonVisibleVoilDocs = voilDocs.filter((doc) => !vscode.window.visibleTextEditors.some((editor) => editor.document === doc.doc));
     if (nonVisibleVoilDocs.length > 0) {
@@ -899,7 +908,8 @@ let newVoilDoc = async () => {
     }
 
     let doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(`untitled:Voil-doc${voilDocs.length}.voil`));
-    let res = new VoilDoc(doc, false, vscode.workspace.workspaceFolders?.[0].uri!);
+    // let res = new VoilDoc(doc, false, vscode.workspace.workspaceFolders?.[0].uri!);
+    let res = new VoilDoc(doc, false, getCurrentUri()!);
     voilDocs.push(res);
     return res;
 };
