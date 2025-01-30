@@ -30,14 +30,6 @@
     ],
     "commands": [
       {
-        "command": "voil.openPanelWithPreview",
-        "title": "voil: Open voil panel with preview at workspace root"
-      },
-      {
-        "command": "voil.openPanelWithPreviewCurrentDir",
-        "title": "voil: Open voil panel with preview at current directory"
-      },
-      {
         "command": "voil.openPanel",
         "title": "voil: Open voil panel at workspace root"
       },
@@ -108,16 +100,6 @@
       {
         "command": "voil.runShellCommandOnSelection",
         "title": "voil: run shell command on selected items"
-      },
-      {
-        "command": "voil.runShellCommandWithIdOnSelection",
-        "title": "voil: run shell command with the given id on selected items",
-        "arguments": [
-          {
-            "name": "id",
-            "type": "string"
-          }
-        ]
       },
       {
         "command": "voil.openCurrentDirectory",
