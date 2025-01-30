@@ -1,6 +1,6 @@
 # Voil
 
-Edit file system like a text buffer (similar to [oil.nvim](https://github.com/stevearc/oil.nvim)). Create new files/directories by typing their names in the editor (names ending with `/` are treated as directories). Convert your existing text-editing skills to file system manipulation skills. As opposed of the vscode's default file explorer which requires mouse interaction or memorizing new keybinds (and still is nowhere near as powerful). Demo:
+Edit file system like a text buffer (similar to [oil.nvim](https://github.com/stevearc/oil.nvim)). Create new files/directories by typing their names in the editor (names ending with `/` are treated as directories). Convert your existing text-editing skills to file system manipulation skills, as opposed of the vscode's default file explorer which requires mouse interaction or memorizing new keybinds (and still is nowhere near as powerful). Demo:
 
 https://github.com/user-attachments/assets/2a04bff7-1c10-45ee-bf02-dd814a08a142
 
@@ -11,11 +11,11 @@ There is a hidden ID associated with each file which is how voil determines whic
 "voil.allowFocusOnIdentifier": true
 ```
 
-If you e.g. want to copy or move a file you must make sure to use commands that also copy the identifier and not just the visible part.
+If you e.g. want to copy or move a file you must make sure to use commands that also copy the identifier and not just the visible part (that is, commands that select entire lines and not words).
 
 ## Example keybind configuration
-Uses `ctrl+shift+b` to open the voil panel and if we are already in voil navigates to the parent directory.
 ### for normal users
+Uses `ctrl+shift+b` to open the voil panel and if we are already in voil navigates to the parent directory.
 ```
 {
     "key": "ctrl+shift+b",
