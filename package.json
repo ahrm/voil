@@ -1,11 +1,12 @@
 {
   "name": "voil",
   "displayName": "voil",
-  "description": "",
+  "description": "Edit the filesystem like a text buffer.",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.96.0"
   },
+  "icon": "images/voil_icon.png",
   "categories": [
     "Other"
   ],
