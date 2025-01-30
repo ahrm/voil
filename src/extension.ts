@@ -976,6 +976,7 @@ const handleStartVoil = async (doc: VoilDoc, initialUri: vscode.Uri, fileToFocus
 
     if (vscode.window.activeTextEditor) {
         vscode.window.activeTextEditor.selection = selection;
+        vscode.window.activeTextEditor.revealRange(new vscode.Range(selection.start, selection.end));
     }
 
     vscode.commands.executeCommand('setContext', 'voilDoc', true);
