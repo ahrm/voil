@@ -4,6 +4,8 @@ Edit file system like a text buffer (similar to [oil.nvim](https://github.com/st
 
 https://github.com/user-attachments/assets/2a04bff7-1c10-45ee-bf02-dd814a08a142
 
+View on the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=AliMostafavi.voil).
+
 ## How it works
 There is a hidden ID associated with each file which is how voil determines which file is being e.g. renamed or moved. This ID is normally hidden using vscode's decorations but you can show them by setting the following configs:
 ```
