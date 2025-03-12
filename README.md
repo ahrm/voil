@@ -36,7 +36,7 @@ Uses `-` key in normal mode to open the voil panel and if we are already in voil
 {
     "key": "-",
     "command": "voil.openPanelCurrentDir",
-    "when": "!voilDoc && vim.mode == 'Normal'"
+    "when": "!voilDoc && vim.mode == 'Normal' && editorFocus"
 },
 {
     "key": "-",
