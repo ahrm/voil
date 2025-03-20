@@ -391,6 +391,9 @@ class VoilDoc {
     hasPreview: boolean;
     currentDirectory: vscode.Uri;
 
+    history: vscode.Uri[] = [];
+    currentHistoryIndex: number = -1; 
+
     watcher: vscode.FileSystemWatcher | undefined;
     watcherHandleEventTimeout: NodeJS.Timeout | undefined = undefined;
 
@@ -575,7 +578,35 @@ class VoilDoc {
 
     set currentDir(uri: vscode.Uri) {
         this.currentDirectory = uri;
+
+        if (this.currentHistoryIndex == -1 || this.history[this.currentHistoryIndex] != uri) {
+            if (this.currentHistoryIndex < this.history.length - 1) {
+                this.history = this.history.slice(0, this.currentHistoryIndex + 1);
+                this.history.push(uri);
+            }
+            else {
+                this.history.push(uri);
+            }
+            this.currentHistoryIndex = this.history.length - 1;
+        }
+
         this.updateWatcher();
+    }
+
+    async goBack() {
+        if (this.currentHistoryIndex > 0){
+            this.currentHistoryIndex -= 1;
+            this.currentDirectory = this.history[this.currentHistoryIndex];
+            await updateDocContentToCurrentDir(this, this.history[this.currentHistoryIndex + 1].path);
+        }
+    }
+
+    async goForward() {
+        if (this.currentHistoryIndex < this.history.length - 1){
+            this.currentHistoryIndex += 1;
+            this.currentDirectory = this.history[this.currentHistoryIndex];
+            await updateDocContentToCurrentDir(this, this.history[this.currentHistoryIndex - 1].path);
+        }
     }
 
     async getFilesRecursive(rootUri: vscode.Uri, prefix: string = '', ignoredPatterns: RegExp[] = [], currentSize: number = 0, depth: number | undefined = undefined): Promise<[string, vscode.FileType][]> {
@@ -1474,6 +1505,16 @@ export function activate(context: vscode.ExtensionContext) {
 
     });
 
+    const voilPreviousCommand = vscode.commands.registerCommand('voil.previous', async () => {
+        let doc = await getVoilDocForActiveEditor();
+        doc?.goBack();
+    });
+
+    const voilNextCommand = vscode.commands.registerCommand('voil.next', async () => {
+        let doc = await getVoilDocForActiveEditor();
+        doc?.goForward();
+    });
+
 
 
     let lastFocusedEditor: vscode.TextEditor | undefined = undefined;
@@ -1499,6 +1540,8 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(setFilterCommand);
     context.subscriptions.push(gotoParentDirCommand);
     context.subscriptions.push(openCurrentDirectory);
+    context.subscriptions.push(voilPreviousCommand);
+    context.subscriptions.push(voilNextCommand);
 
     context.subscriptions.push(
         vscode.workspace.onDidCloseTextDocument(async (doc) => {

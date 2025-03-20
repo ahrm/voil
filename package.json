@@ -47,6 +47,14 @@
         "title": "voil: Toggle recursive listing"
       },
       {
+        "command": "voil.previous",
+        "title": "voil: Go to the previous directory"
+      },
+      {
+        "command": "voil.next",
+        "title": "voil: Go to the next directory"
+      },
+      {
         "command": "voil.gotoParentDir",
         "title": "voil: Go to parent directory"
       },
