@@ -237,7 +237,7 @@ const parseLine = (line: string): DirectoryListingData => {
             identifier: '',
             isDir: isDir,
             name: name,
-            isNew: !name.startsWith('.')
+            isNew: !((name === '.') || name === '..')
         };
 
     }
