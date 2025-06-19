@@ -18,6 +18,10 @@ const IGNORED_DIRNAMES = [
     ".git",
 ]
 
+function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 class CustomShellCommand{
     name: string;
     id: string;
@@ -261,8 +265,7 @@ const getCutIdentifiersFromFileContents = (prevContentOnDisk: string, prevConten
     return cutIds;
 };
 
-const updateCutIdentifiers = async (doc: VoilDoc, prevContentOnDisk: string) => {
-    let prevContentOnFile = doc.doc.getText();
+const updateCutIdentifiers = async (prevContentOnFile: string, prevContentOnDisk: string) => {
 
     let cutIds = getCutIdentifiersFromFileContents(prevContentOnDisk, prevContentOnFile);
     if (cutIds.size) {
@@ -270,16 +273,28 @@ const updateCutIdentifiers = async (doc: VoilDoc, prevContentOnDisk: string) => 
     }
 };
 
-let updateDocContentToCurrentDir = async (doc: VoilDoc, prevDirectory: string | undefined = undefined) => {
+let updateDocContentToCurrentDir = async (doc: VoilDoc, prevDirectory: string | undefined = undefined, shouldClear: boolean = false) => {
 
     let rootUri = doc.currentDir;
+
+    let prevContentOnFile = doc.doc.getText();
+    let docTextEditor = doc.getTextEditor();
+
+    if (shouldClear && docTextEditor){
+        await docTextEditor.edit((editBuilder) => {
+            editBuilder.replace(new vscode.Range(
+                docTextEditor.document.positionAt(0),
+                docTextEditor.document.positionAt(docTextEditor.document.getText().length)
+            ), "loading ...");
+        });
+    }
+
     let content = await doc.getContentForPath(rootUri!);
 
     if (prevDirectory) {
         let prevContentOnDisk = await doc.getContentForPath(vscode.Uri.parse(prevDirectory));
-        updateCutIdentifiers(doc, prevContentOnDisk);
+        updateCutIdentifiers(prevContentOnFile, prevContentOnDisk);
     }
-    let docTextEditor = doc.getTextEditor();
 
     // why do we do two different things here?
     // it is possible the the document doesn't have a text editor, so we need the second option for that case
@@ -292,6 +307,14 @@ let updateDocContentToCurrentDir = async (doc: VoilDoc, prevDirectory: string | 
                 docTextEditor.document.positionAt(docTextEditor.document.getText().length)
             ), content);
         });
+
+        if (shouldClear){
+            let selection = new vscode.Selection(doc.doc.positionAt(0), doc.doc.positionAt(0));
+            let editor = doc.getTextEditor();
+            if (editor !== undefined) {
+                editor.selection = selection;
+            }
+        }
     }
     else {
 
@@ -657,6 +680,8 @@ class VoilDoc {
         }
         return res;
     }
+
+
 
     async getContentForPath(rootUri: vscode.Uri, isPreview: boolean = false) {
         let files = await vscode.workspace.fs.readDirectory(rootUri!);
@@ -1435,7 +1460,7 @@ export function activate(context: vscode.ExtensionContext) {
                         vscode.window.activeTextEditor.revealRange(new vscode.Range(0, 0, 0, 0));
                     }
                 }
-                await updateDocContentToCurrentDir(doc, prevDirectory);
+                await updateDocContentToCurrentDir(doc, prevDirectory, true);
                 if (focusLine){
                     doc.focusOnLineWithContent(focusLine + "/");
                 }
@@ -1572,7 +1597,7 @@ export function activate(context: vscode.ExtensionContext) {
                 if (doc) {
                     let prevDirectory = doc.currentDir?.path;
                     let prevListingContent = await doc.getContentForPath(vscode.Uri.parse(prevDirectory!));
-                    updateCutIdentifiers(doc, prevListingContent);
+                    updateCutIdentifiers(doc.doc.getText(), prevListingContent);
                 }
             }
 
