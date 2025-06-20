@@ -1315,6 +1315,15 @@ export function activate(context: vscode.ExtensionContext) {
         // if (content !== doc.previousContent){
         //     originalContent = await doc.getContentForPath(doc.currentDir!);
         // }
+        let currentTargetPath = content.split("\n")[0];
+        let originalTargetPath = originalContent.split("\n")[0];
+        if (currentTargetPath !== originalTargetPath){
+
+            doc.currentDir = vscode.Uri.parse(currentTargetPath);
+            await updateDocContentToCurrentDir(doc);
+            doc.enableWatcher();
+            return;
+        }
 
         let { copiedIdentifiers, movedIdentifiers, renamedIdentifiers, deletedIdentifiers } = getModificationsFromContentDiff(doc, originalContent, content);
 
