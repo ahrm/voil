@@ -1637,7 +1637,8 @@ export function activate(context: vscode.ExtensionContext) {
                 let doc = await getVoilDocForEditor(prevEditor);
                 if (doc) {
                     let prevDirectory = doc.currentDir?.path;
-                    let prevListingContent = await doc.getContentForPath(vscode.Uri.parse(prevDirectory!));
+                    // let prevListingContent = await doc.getContentForPath(vscode.Uri.parse(prevDirectory!));
+                    let prevListingContent = doc.previousContent;
                     updateCutIdentifiers(doc.doc.getText(), prevListingContent);
                 }
             }
