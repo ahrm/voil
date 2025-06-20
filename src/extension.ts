@@ -318,7 +318,8 @@ let updateDocContentToCurrentDir = async (doc: VoilDoc, prevDirectory: string | 
         });
 
         if (shouldClear){
-            let selection = new vscode.Selection(doc.doc.positionAt(0), doc.doc.positionAt(0));
+            let line = doc.doc.lineAt(HEADER_LINES);
+            let selection = new vscode.Selection(line.range.start, line.range.start);
             let editor = doc.getTextEditor();
             if (editor !== undefined) {
                 editor.selection = selection;
@@ -1092,7 +1093,7 @@ const handleStartVoil = async (doc: VoilDoc, initialUri: vscode.Uri, fileToFocus
 
     await vscode.window.showTextDocument(doc.doc);
     // move cursor to the first line
-    let selection = new vscode.Selection(doc.doc.positionAt(0), doc.doc.positionAt(0));
+    let selection = new vscode.Selection(doc.doc.positionAt(HEADER_LINES), doc.doc.positionAt(HEADER_LINES));
     if (fileToFocus) {
         let lineIndex = doc.doc.getText().split('\n').findIndex((line) => line.trimEnd().endsWith(fileToFocus));
         if (lineIndex !== undefined && lineIndex !== -1) {
@@ -1540,8 +1541,10 @@ export function activate(context: vscode.ExtensionContext) {
                 else {
                     doc.currentDir = vscode.Uri.joinPath(doc.currentDir!, currentDirName!);
                     if (vscode.window.activeTextEditor) {
-                        vscode.window.activeTextEditor.selection = new vscode.Selection(0, 0, 0, 0);
-                        vscode.window.activeTextEditor.revealRange(new vscode.Range(0, 0, 0, 0));
+                        let line = doc.doc?.lineAt(HEADER_LINES);
+                        let selection = new vscode.Selection(line.range.start, line.range.start);
+                        vscode.window.activeTextEditor.selection = selection;
+                        vscode.window.activeTextEditor.revealRange(new vscode.Range(HEADER_LINES, 0, 0, 0));
                     }
                 }
                 await updateDocContentToCurrentDir(doc, prevDirectory, true);
