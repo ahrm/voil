@@ -3,6 +3,7 @@ import * as path from 'path';
 
 import * as utils from './utils';
 
+const HEADER_LINES = 2;
 const IDENTIFIER_SIZE = 7;
 const METADATA_BEGIN_SYMBOL = "/[";
 const METADATA_END_SYMBOL = "]/";
@@ -12,6 +13,7 @@ const ILLEGAL_FILE_NAMES_ON_WINDOWS = [
     "$RECYCLE.BIN",
     "DumpStack.log.tmp"
 ];
+
 
 const MAX_RECURSIVE_DIR_LISTING_SIZE = 10000;
 const IGNORED_DIRNAMES = [
@@ -725,7 +727,15 @@ class VoilDoc {
         if (!isPreview && this.showRecursive) {
             files = await this.getFilesRecursive(rootUri);
         }
+        let currentPath = rootUri.path;
         let content = '';
+        content += currentPath + "\n";
+
+        let headerSeparator = '';
+        for (let i = 0; i < currentPath.length; i++){
+            headerSeparator += '=';
+        }
+        content += headerSeparator + "\n";
 
         let fileNameToMetadata: Map<string, string> = new Map();
         let fileNameToStats: Map<string, vscode.FileStat> = new Map();
@@ -868,6 +878,7 @@ const applyIdentifierDecoration = (editor: vscode.TextEditor, doc: vscode.TextDo
     };
 
     for (let lineIndex = 0; lineIndex < doc.lineCount; lineIndex++) {
+        if (lineIndex < HEADER_LINES) continue;
         let line = doc.lineAt(lineIndex);
         let lineText = line.text;
         let prefixSize = IDENTIFIER_SIZE + 4;
@@ -1053,7 +1064,13 @@ const focusOnFileWithName = async (voil: VoilDoc, name: string) => {
 
 const getIdentifiersFromContent = (content: string) => {
     let res: Map<string, DirectoryListingData[]> = new Map();
+    let lineIndex = 0;
     for (let line of content.split('\n')) {
+        lineIndex++;
+        if (lineIndex <= HEADER_LINES){
+            continue;
+        }
+
         if (line.trim().length === 0) {
             continue;
         }
@@ -1389,7 +1406,11 @@ export function activate(context: vscode.ExtensionContext) {
 
         let lines = content.split('\n');
         var modified = deletedIdentifiers.size > 0 || copiedIdentifiers.size > 0 || renamedIdentifiers.size > 0 || movedIdentifiers.size > 0;
+        let lineIndex = 0;
         for (let line of lines){
+            lineIndex++;
+            if (lineIndex <= HEADER_LINES) continue;
+
             if (line.trim().length === 0) {
                 continue;
             }
