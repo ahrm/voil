@@ -17,9 +17,15 @@ const MAX_RECURSIVE_DIR_LISTING_SIZE = 10000;
 const IGNORED_DIRNAMES = [
     ".git",
 ]
+let extensionDataDir: vscode.Uri | undefined = undefined;
 
 function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getFileNameFromUri(uri: vscode.Uri){
+    let sep = path.sep;
+    return uri.fsPath.split(sep).pop();
 }
 
 class CustomShellCommand{
@@ -974,7 +980,8 @@ let getVoilDoc = async () => {
     if (voilPanel) {
         return voilPanel;
     }
-    let doc = await vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:Voil.voil'));
+    let docUri = vscode.Uri.parse('untitled:Voil.voil');
+    let doc = await vscode.workspace.openTextDocument(docUri);
     let res = new VoilDoc(doc, previewEnabled, vscode.workspace.workspaceFolders?.[0].uri!);
     voilPanel = res;
     return res;
@@ -995,7 +1002,22 @@ let newVoilDoc = async () => {
         return nonVisibleVoilDocs[0];
     }
 
-    let doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(`untitled:Voil-doc${voilDocs.length}.voil`));
+    let docUri = vscode.Uri.parse(`untitled:Voil-doc${voilDocs.length}.voil`);
+    let usedDocNames = voilDocs.map((doc)=>getFileNameFromUri(doc.doc.uri));
+
+    let newFileIndex: number = 0;
+    let newFileName: string =  `Voil #${newFileIndex}.voil`;
+    while (usedDocNames.includes(newFileName)){
+        newFileIndex++;
+        newFileName =  `Voil #${newFileIndex}.voil`;
+    }
+
+    if (extensionDataDir){
+        docUri = vscode.Uri.joinPath(extensionDataDir, newFileName);
+        await vscode.workspace.fs.writeFile(docUri, new Uint8Array());
+    }
+
+    let doc = await vscode.workspace.openTextDocument(docUri);
     // let res = new VoilDoc(doc, false, vscode.workspace.workspaceFolders?.[0].uri!);
     let res = new VoilDoc(doc, false, getCurrentUri()!);
     voilDocs.push(res);
@@ -1141,6 +1163,7 @@ export function activate(context: vscode.ExtensionContext) {
     // var currentDir = vscode.workspace.workspaceFolders?.[0].uri;
 
     // update the settings when they change
+    extensionDataDir = context.globalStorageUri;
     vscode.workspace.onDidChangeConfiguration((e) => {
         config = vscode.workspace.getConfiguration('voil');
         previewEnabled = config.get<boolean>('previewAutoOpen') ?? false;
@@ -1607,6 +1630,12 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(openCurrentDirectory);
     context.subscriptions.push(voilPreviousCommand);
     context.subscriptions.push(voilNextCommand);
+
+    context.subscriptions.push(
+        vscode.workspace.onWillSaveTextDocument(async (event: vscode.TextDocumentWillSaveEvent) => {
+            await vscode.commands.executeCommand('voil.save');
+        })
+    );
 
     context.subscriptions.push(
         vscode.workspace.onDidCloseTextDocument(async (doc) => {
