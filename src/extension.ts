@@ -429,6 +429,9 @@ class VoilDoc {
     filterString: string = "";
     previousContent: string = "";
 
+    creationEventSubscription : vscode.Disposable | undefined = undefined;
+    deletionEventSubscription : vscode.Disposable | undefined = undefined;
+
     showRecursive: boolean = false;
 
     constructor(doc: vscode.TextDocument, hasPreview: boolean, currentDir: vscode.Uri) {
@@ -516,12 +519,38 @@ class VoilDoc {
             this.watcher.dispose();
         }
         this.watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(this.currentDirectory.fsPath, '*'));
-        this.watcher.onDidDelete(async (e) => {
-            this.resetWatcherTimeout();
-        });
-        this.watcher.onDidCreate(async (e) => {
-            this.resetWatcherTimeout();
-        });
+        this.enableWatcher();
+    }
+
+    disableWatcher(){
+
+        if (this.deletionEventSubscription){
+            this.deletionEventSubscription.dispose();
+            this.creationEventSubscription?.dispose();
+        }
+
+        if (this.watcher){
+            this.watcher.ignoreChangeEvents
+            this.deletionEventSubscription = this.watcher.onDidDelete(async (e)=>{});
+            this.creationEventSubscription = this.watcher.onDidCreate(async (e)=>{});
+        }
+    }
+
+    enableWatcher(){
+
+        if (this.deletionEventSubscription){
+            this.deletionEventSubscription.dispose();
+            this.creationEventSubscription?.dispose();
+        }
+
+        if (this.watcher){
+            this.deletionEventSubscription = this.watcher.onDidDelete(async (e) => {
+                this.resetWatcherTimeout();
+            });
+            this.creationEventSubscription = this.watcher.onDidCreate(async (e) => {
+                this.resetWatcherTimeout();
+            });
+        }
     }
 
     getTextEditor() {
@@ -1237,6 +1266,9 @@ export function activate(context: vscode.ExtensionContext) {
     const handleSave = vscode.commands.registerCommand('voil.save', async () => {
         let doc = await getVoilDocForActiveEditor();
         if (!doc) return;
+
+        // we don't want filesystem notifications for the changes we do ourselves
+        doc.disableWatcher();
         let content = doc.doc.getText();
         let originalContent = doc.previousContent;
 
@@ -1374,6 +1406,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         cutIdentifiers.clear();
+        doc.enableWatcher();
     });
 
     const handleCd = vscode.commands.registerCommand('voil.cd', async () => {
