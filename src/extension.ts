@@ -716,7 +716,6 @@ class VoilDoc {
 
     async getContentForPath(rootUri: vscode.Uri, isPreview: boolean = false) {
         let files = await vscode.workspace.fs.readDirectory(rootUri!);
-        // await sleep(1000);
         if (!isPreview && this.showRecursive) {
             files = await this.getFilesRecursive(rootUri);
         }
