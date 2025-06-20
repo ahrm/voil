@@ -289,10 +289,11 @@ let updateDocContentToCurrentDir = async (doc: VoilDoc, prevDirectory: string | 
         });
     }
 
+    let prevContentOnDisk = doc.previousContent;
     let content = await doc.getContentForPath(rootUri!);
 
     if (prevDirectory) {
-        let prevContentOnDisk = await doc.getContentForPath(vscode.Uri.parse(prevDirectory));
+        // let prevContentOnDisk = await doc.getContentForPath(vscode.Uri.parse(prevDirectory));
         updateCutIdentifiers(prevContentOnFile, prevContentOnDisk);
     }
 
@@ -426,6 +427,7 @@ class VoilDoc {
     isAscending: boolean = true;
 
     filterString: string = "";
+    previousContent: string = "";
 
     showRecursive: boolean = false;
 
@@ -685,6 +687,7 @@ class VoilDoc {
 
     async getContentForPath(rootUri: vscode.Uri, isPreview: boolean = false) {
         let files = await vscode.workspace.fs.readDirectory(rootUri!);
+        // await sleep(1000);
         if (!isPreview && this.showRecursive) {
             files = await this.getFilesRecursive(rootUri);
         }
@@ -809,6 +812,7 @@ class VoilDoc {
             lineContent = lineContent.padEnd(maxMetadataSize, ' ');
             content += `/${lineContent}${file[0]}${dirPostfix}\n`;
         }
+        this.previousContent = content;
         return content;
     }
 }
@@ -1233,8 +1237,12 @@ export function activate(context: vscode.ExtensionContext) {
     const handleSave = vscode.commands.registerCommand('voil.save', async () => {
         let doc = await getVoilDocForActiveEditor();
         if (!doc) return;
-        let originalContent = await doc.getContentForPath(doc.currentDir!);
         let content = doc.doc.getText();
+        let originalContent = doc.previousContent;
+
+        // if (content !== doc.previousContent){
+        //     originalContent = await doc.getContentForPath(doc.currentDir!);
+        // }
 
         let { copiedIdentifiers, movedIdentifiers, renamedIdentifiers, deletedIdentifiers } = getModificationsFromContentDiff(doc, originalContent, content);
 
