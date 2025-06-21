@@ -1535,6 +1535,13 @@ export function activate(context: vscode.ExtensionContext) {
         let currentCursorLineIndex = vscode.window.activeTextEditor?.selection.active.line;
         let prevDirectory = doc.currentDir?.path;
         if (currentCursorLineIndex !== undefined) {
+            if (currentCursorLineIndex < HEADER_LINES){
+                // when we press enter on the current path at the top, open it in the file explorer
+                if (currentCursorLineIndex == 0){
+                    vscode.env.openExternal(vscode.Uri.file(doc.currentDir.path));
+                }
+                return;
+            }
             let {identifier, isDir, name} = parseLine(doc.doc.getText(doc.doc.lineAt(currentCursorLineIndex).range) ?? '');
             let currentDirName = name;
             var focusLine = '';
