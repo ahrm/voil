@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 
 import * as utils from './utils';
+import { count } from 'console';
 
 const HEADER_LINES = 2;
 const IDENTIFIER_SIZE = 7;
@@ -27,7 +28,7 @@ function sleep(ms: number): Promise<void> {
 
 function getFileNameFromUri(uri: vscode.Uri){
     let sep = path.sep;
-    return uri.fsPath.split(sep).pop();
+    return uri.toString().split(sep).pop();
 }
 
 class CustomShellCommand{
@@ -527,7 +528,7 @@ class VoilDoc {
         if (this.watcher) {
             this.watcher.dispose();
         }
-        this.watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(this.currentDirectory.fsPath, '*'));
+        this.watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(this.currentDirectory.toString(), '*'));
         this.enableWatcher();
     }
 
@@ -597,14 +598,14 @@ class VoilDoc {
 
         let isBatch = cmd.includes('${files}') || cmd.includes('${filenames}');
         let items = this.getSelectedItems();
-        let rootDir: string = this.currentDir.path;
+        let rootDir: string = this.currentDir.toString();
 
         if (process.platform === "win32") {
             rootDir = rootDir.slice(1);
         }
 
         const mapFilenameToPath = (filename: string) => {
-            let res = vscode.Uri.joinPath(this.currentDir!, filename).path;
+            let res = vscode.Uri.joinPath(this.currentDir!, filename).toString();
             if (res[0] == "/" && (process.platform === "win32")) {
                 res = res.slice(1);
             }
@@ -660,7 +661,7 @@ class VoilDoc {
         if (this.currentHistoryIndex > 0){
             this.currentHistoryIndex -= 1;
             this.currentDirectory = this.history[this.currentHistoryIndex];
-            await updateDocContentToCurrentDir(this, this.history[this.currentHistoryIndex + 1].path);
+            await updateDocContentToCurrentDir(this, this.history[this.currentHistoryIndex + 1].toString());
         }
     }
 
@@ -668,7 +669,7 @@ class VoilDoc {
         if (this.currentHistoryIndex < this.history.length - 1){
             this.currentHistoryIndex += 1;
             this.currentDirectory = this.history[this.currentHistoryIndex];
-            await updateDocContentToCurrentDir(this, this.history[this.currentHistoryIndex - 1].path);
+            await updateDocContentToCurrentDir(this, this.history[this.currentHistoryIndex - 1].toString());
         }
     }
 
@@ -723,17 +724,25 @@ class VoilDoc {
 
 
 
+    getCurrentDirPath(){
+        let currentPath = this.currentDirectory.toString();
+        if (currentPath.startsWith('file://')) {
+            currentPath = currentPath.slice(7);
+        }
+        return currentPath;
+    }
+
     async getContentForPath(rootUri: vscode.Uri, isPreview: boolean = false) {
         let files = await vscode.workspace.fs.readDirectory(rootUri!);
         if (!isPreview && this.showRecursive) {
             files = await this.getFilesRecursive(rootUri);
         }
-        let currentPath = rootUri.path;
+        let currentPath = rootUri.toString();
         let content = '';
-        content += currentPath + "\n";
+        content += this.getCurrentDirPath() + "\n";
 
         let headerSeparator = '';
-        for (let i = 0; i < currentPath.length; i++){
+        for (let i = 0; i < this.getCurrentDirPath().length; i++){
             headerSeparator += '=';
         }
         content += headerSeparator + "\n";
@@ -745,7 +754,7 @@ class VoilDoc {
         let maxMetadataSize = 0;
         if (needsMetaString || this.sortBy === SortBy.Size || this.sortBy === SortBy.CreationDate) {
             for (let file of files) {
-                let fullPath = vscode.Uri.joinPath(rootUri!, file[0]).path;
+                let fullPath = vscode.Uri.joinPath(rootUri!, file[0]).toString();
                 if ((process.platform === "win32") && ILLEGAL_FILE_NAMES_ON_WINDOWS.includes(file[0])) {
                     continue;
                 }
@@ -832,7 +841,7 @@ class VoilDoc {
             }
 
             let isDir = file[1] === vscode.FileType.Directory;
-            let fullPath = vscode.Uri.joinPath(rootUri!, file[0]).path;
+            let fullPath = vscode.Uri.joinPath(rootUri!, file[0]).toString();
             let identifier = getIdentifierForPath(fullPath);
             let meta = '';
             if (this.showFileSize || this.showFileCreationDate) {
@@ -1123,7 +1132,7 @@ const getModificationsFromContentDiff = (doc: VoilDoc, oldContent: string, newCo
         let originalPath = getPathForIdentifier(identifier);
         let originalParentPath = utils.getPathParts(originalPath).slice(0, -1).join('/');
         // let isCurrentDirTheSameAsOriginal = doc.showRecursive || (doc.currentDir?.path === originalParentPath);
-        let isCurrentDirTheSameAsOriginal = doc.showRecursive || utils.isSamePath(doc.currentDir?.path, originalParentPath);
+        let isCurrentDirTheSameAsOriginal = doc.showRecursive || utils.isSamePath(doc.currentDir?.toString(), originalParentPath);
         let newItems: DirectoryListingData[] = [];
         let originalExists = false;
 
@@ -1132,7 +1141,7 @@ const getModificationsFromContentDiff = (doc: VoilDoc, oldContent: string, newCo
             if (item.isDir && itemName.endsWith("/")) {
                 itemName = itemName.slice(0, -1);
             }
-            let itemPath = vscode.Uri.joinPath(doc.currentDir!, itemName).path;
+            let itemPath = vscode.Uri.joinPath(doc.currentDir!, itemName).toString();
             if (originalPath && originalPath !== itemPath) {
                 newItems.push(item);
             }
@@ -1180,9 +1189,25 @@ const getModificationsFromContentDiff = (doc: VoilDoc, oldContent: string, newCo
 export function activate(context: vscode.ExtensionContext) {
     // var currentDir = vscode.workspace.workspaceFolders?.[0].uri;
 
+    // const countKey = 'voil.count';
+    // if (context.globalState.keys().length == 0){
+    //     context.globalState.setKeysForSync([countKey]);
+    //     context.globalState.update(countKey, 0);
+    //     console.log('initial');
+    // }
+    // else{
+    //     let currentCount: number = context.globalState.get(countKey)!;
+    //     context.globalState.update(countKey, currentCount+1);
+    //     console.log(currentCount);
+    // }
+    // console.log('activated new');
+    // console.log(vscode.env.remoteName);
+
     // update the settings when they change
     extensionDataDir = context.globalStorageUri;
+
     vscode.workspace.onDidChangeConfiguration((e) => {
+        context.globalState
         config = vscode.workspace.getConfiguration('voil');
         previewEnabled = config.get<boolean>('previewAutoOpen') ?? false;
         allowFocusOnIdentifier = config.get<boolean>('allowFocusOnIdentifier') ?? false;
@@ -1286,7 +1311,7 @@ export function activate(context: vscode.ExtensionContext) {
         let voil = await getVoilDocForActiveEditor();
         if (voil){
             let parentDir = vscode.Uri.joinPath(voil.currentDir, '..');
-            let currentDirectoryName = path.basename(voil.currentDir.path);
+            let currentDirectoryName = path.basename(voil.currentDir.toString());
             voil.currentDir = parentDir;
             await updateDocContentToCurrentDir(voil);
             await voil.focusOnLineWithContent(currentDirectoryName + "/");
@@ -1298,7 +1323,7 @@ export function activate(context: vscode.ExtensionContext) {
         let doc = await getVoilDocForActiveEditor();
         if (doc) {
             // open the operating system's file explorer in the current directory
-            vscode.env.openExternal(vscode.Uri.file(doc.currentDir.path));
+            vscode.env.openExternal(vscode.Uri.file(doc.getCurrentDirPath()));
         }
     });
 
@@ -1332,7 +1357,7 @@ export function activate(context: vscode.ExtensionContext) {
         for (let [identifier, items] of copiedIdentifiers){
             let originalPath = getPathForIdentifier(identifier);
             for (let item of items){
-                let newPath = vscode.Uri.joinPath(doc.currentDir!, item.name).path;
+                let newPath = vscode.Uri.joinPath(doc.currentDir!, item.name).toString();
                 if (originalPath){
                     await vscode.workspace.fs.copy(vscode.Uri.parse(originalPath), vscode.Uri.parse(newPath));
 
@@ -1379,7 +1404,7 @@ export function activate(context: vscode.ExtensionContext) {
                 }
                 for (let [identifier, item] of renamedIdentifiers) {
                     let originalPath = getPathForIdentifier(identifier);
-                    let newPath = vscode.Uri.joinPath(doc.currentDir!, item.newData.name).path;
+                    let newPath = vscode.Uri.joinPath(doc.currentDir!, item.newData.name).toString();
                     // do the rename
                     if (originalPath && newPath) {
                         await vscode.workspace.fs.rename(vscode.Uri.parse(originalPath), vscode.Uri.parse(newPath));
@@ -1394,7 +1419,7 @@ export function activate(context: vscode.ExtensionContext) {
 
                 for (let [identifier, item] of movedIdentifiers) {
                     let originalPath = getPathForIdentifier(identifier);
-                    let newPath = vscode.Uri.joinPath(doc.currentDir!, item.newData.name).path;
+                    let newPath = vscode.Uri.joinPath(doc.currentDir!, item.newData.name).toString();
                     if (originalPath && newPath) {
                         await vscode.workspace.fs.rename(vscode.Uri.parse(originalPath), vscode.Uri.parse(newPath));
                         pathToIdentifierMap.delete(originalPath);
@@ -1533,12 +1558,12 @@ export function activate(context: vscode.ExtensionContext) {
 
         // let activeEditor = doc.getTextEditor();
         let currentCursorLineIndex = vscode.window.activeTextEditor?.selection.active.line;
-        let prevDirectory = doc.currentDir?.path;
+        let prevDirectory = doc.currentDir?.toString();
         if (currentCursorLineIndex !== undefined) {
             if (currentCursorLineIndex < HEADER_LINES){
                 // when we press enter on the current path at the top, open it in the file explorer
                 if (currentCursorLineIndex == 0){
-                    vscode.env.openExternal(vscode.Uri.file(doc.currentDir.path));
+                    vscode.env.openExternal(vscode.Uri.file(doc.getCurrentDirPath()));
                 }
                 return;
             }
@@ -1550,7 +1575,7 @@ export function activate(context: vscode.ExtensionContext) {
                 doc.filterString = '';
                 if (currentDirName === '..') {
                     // focusline should be the last part of current path
-                    let pathParts = utils.getPathParts(doc.currentDir?.path);
+                    let pathParts = utils.getPathParts(doc.currentDir?.toString());
                     focusLine = pathParts?.[pathParts.length - 1] ?? '';
                     doc.currentDir = vscode.Uri.joinPath(doc.currentDir!, '..');
                 }
@@ -1608,7 +1633,7 @@ export function activate(context: vscode.ExtensionContext) {
         let currentDocumentName = undefined;
         if (currentDocumentPath){
             if (!currentDocumentPath.toString().endsWith(".voil")){
-                currentDocumentName = path.basename(currentDocumentPath.path);
+                currentDocumentName = path.basename(currentDocumentPath.toString());
                 parentUri = vscode.Uri.joinPath(currentDocumentPath!, '..');
             }
         }
@@ -1624,7 +1649,7 @@ export function activate(context: vscode.ExtensionContext) {
         let currentDocumentName = undefined;
         if (currentDocumentPath){
             if (!currentDocumentPath.toString().endsWith(".voil")){
-                currentDocumentName = path.basename(currentDocumentPath.path);
+                currentDocumentName = path.basename(currentDocumentPath.toString());
                 parentUri = vscode.Uri.joinPath(currentDocumentPath!, '..');
             }
         }
@@ -1679,7 +1704,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         vscode.workspace.onDidCloseTextDocument(async (doc) => {
-            if (doc.uri.fsPath.endsWith('.voil')) {
+            if (doc.uri.toString().endsWith('.voil')) {
                 let voil = voilDocs.find((v) => v.doc === doc);
                 if (voil) {
                     voilDocs = voilDocs.filter((v) => v !== voil);
@@ -1693,7 +1718,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor(async (editor) => {
 
-            vscode.commands.executeCommand('setContext', 'voilDoc', editor?.document.uri.fsPath.endsWith('.voil'));
+            vscode.commands.executeCommand('setContext', 'voilDoc', editor?.document.uri.toString().endsWith('.voil'));
 
             // when active editor changes, update the cut identifiers
             // this is to enable cutting between different voil panels
@@ -1701,10 +1726,10 @@ export function activate(context: vscode.ExtensionContext) {
             // we need to have updated cut identifiers in the old panel when we switch to the new panel
             let prevEditor = lastFocusedEditor;
             lastFocusedEditor = editor;
-            if (prevEditor && prevEditor.document.uri.fsPath.endsWith('.voil')) {
+            if (prevEditor && prevEditor.document.uri.toString().endsWith('.voil')) {
                 let doc = await getVoilDocForEditor(prevEditor);
                 if (doc) {
-                    let prevDirectory = doc.currentDir?.path;
+                    let prevDirectory = doc.currentDir?.toString();
                     // let prevListingContent = await doc.getContentForPath(vscode.Uri.parse(prevDirectory!));
                     let prevListingContent = doc.previousContent;
                     updateCutIdentifiers(doc.doc.getText(), prevListingContent);
@@ -1719,7 +1744,7 @@ export function activate(context: vscode.ExtensionContext) {
                 filterStatusBarItem.hide();
             }
 
-            let isPreviewWindow = editor?.document.uri.fsPath.endsWith(':preview.voil');
+            let isPreviewWindow = editor?.document.uri.toString().endsWith(':preview.voil');
             if (!isPreviewWindow && hideIdentifier && (doc !== undefined) && (editor !== undefined)) {
                 applyIdentifierDecoration(editor, editor.document);
             }
@@ -1730,7 +1755,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.workspace.onDidChangeTextDocument(async (event) => {
             if (hideIdentifier && (event.document === vscode.window.activeTextEditor?.document)){
-                let isVoil = event.document.uri.fsPath.endsWith('.voil') && !event.document.uri.fsPath.endsWith(':preview.voil');
+                let isVoil = event.document.uri.toString().endsWith('.voil') && !event.document.uri.toString().endsWith(':preview.voil');
                 if (isVoil){
                     applyIdentifierDecoration(vscode.window.activeTextEditor, event.document);
                 }
@@ -1743,7 +1768,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         vscode.window.onDidChangeTextEditorSelection(async (event) => {
-            if (!event.textEditor.document.uri.fsPath.endsWith('.voil')) {
+            if (!event.textEditor.document.uri.toString().endsWith('.voil')) {
                 return;
             }
 
@@ -1835,5 +1860,5 @@ export function activate(context: vscode.ExtensionContext) {
     // filterStatusBarItem.show();
 }
 
-// This method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() {
+}
