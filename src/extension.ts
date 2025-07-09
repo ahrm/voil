@@ -466,6 +466,7 @@ class VoilDoc {
     doc: vscode.TextDocument;
     hasPreview: boolean;
     currentDirectory: vscode.Uri;
+    terminal: vscode.Terminal | undefined = undefined;
 
     history: vscode.Uri[] = [];
     currentHistoryIndex: number = -1; 
@@ -518,6 +519,31 @@ class VoilDoc {
         this.sortBy = SortBy.Name;
         await updateDocContentToCurrentDir(this);
     }
+
+    openTerminal(initialPath: string){
+
+        if (this.terminal == undefined) {
+            this.terminal = vscode.window.createTerminal({
+                name: 'Voil Terminal',
+                cwd: initialPath
+            });
+            return this.terminal;
+        }
+        else{
+            if (this.terminal.exitStatus) {
+                this.terminal.dispose();
+                this.terminal = vscode.window.createTerminal({
+                    name: 'Voil Terminal',
+                    cwd: initialPath
+                });
+            }
+            else{
+                this.terminal.sendText(`cd "${initialPath}"`);
+            }
+            return this.terminal;
+        }
+    }
+
 
     async sortByCreationTime() {
         this.sortBy = SortBy.CreationDate;
@@ -1638,6 +1664,14 @@ export async function activate(context: vscode.ExtensionContext) {
             if (currentCursorLineIndex < HEADER_LINES){
                 // when we press enter on the current path at the top, open it in the file explorer
                 if (currentCursorLineIndex == 0){
+
+                    let terminal = doc.openTerminal(doc.getCurrentDirPath());
+                    if (terminal) {
+                        terminal.show();
+                    }
+
+                }
+                else{
                     vscode.env.openExternal(vscode.Uri.file(doc.getCurrentDirPath()));
                 }
                 return;
