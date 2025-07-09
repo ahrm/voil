@@ -570,7 +570,11 @@ class VoilDoc {
         if (this.watcher) {
             this.watcher.dispose();
         }
-        this.watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(this.currentDirectory.toString(), '*'));
+        let path = this.currentDirectory.toString();
+        if (path.startsWith('file://')) {
+            path = path.slice(7);
+        }
+        this.watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(path, '*'));
         this.enableWatcher();
     }
 
