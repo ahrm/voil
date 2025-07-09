@@ -9,7 +9,7 @@ const RUNNING_VOIL_INSTANCES_KEY = 'runningVoilInstances';
 const PATH_TO_IDENTIFIER_MAP_KEY = 'pathToIdentifierMap';
 const IDENTIFIER_TO_PATH_MAP_KEY = 'identifierToPathMap';
 const HEADER_LINES = 2;
-const IDENTIFIER_SIZE = 7;
+const IDENTIFIER_SIZE = 20;
 const METADATA_BEGIN_SYMBOL = "/[";
 const METADATA_END_SYMBOL = "]/";
 const PREVDIR_LINE = "../";
@@ -261,7 +261,7 @@ const parseLine = (line: string): DirectoryListingData => {
     }
 
     // line begins with slash folllowed by identifier
-    let regex = /^\/[A-Za-z]{7}/;
+    let regex = new RegExp(`^\/[A-Za-z]{${IDENTIFIER_SIZE}}`);
     let index = line.search(regex);
     let hasIdentifier = index >= 0;
 
@@ -1475,6 +1475,7 @@ export async function activate(context: vscode.ExtensionContext) {
             for (let item of items){
                 let newPath = vscode.Uri.joinPath(doc.currentDir!, item.name).toString();
                 if (originalPath){
+
                     await vscode.workspace.fs.copy(vscode.Uri.parse(originalPath), vscode.Uri.parse(newPath));
 
                     let newIdentifier = getIdentifierForPath(newPath);
@@ -1884,7 +1885,7 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     const LISTING_PREFIX_SIZE = IDENTIFIER_SIZE + 4; 
-    const LISTING_REGEX = new RegExp('^\\/[a-zA-Z]{7} [-/] ');
+    const LISTING_REGEX = new RegExp(`^\\/[a-zA-Z]{${IDENTIFIER_SIZE}} [-/] `);
 
     context.subscriptions.push(
         vscode.window.onDidChangeTextEditorSelection(async (event) => {
