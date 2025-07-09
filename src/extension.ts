@@ -1068,15 +1068,18 @@ let newVoilDoc = async () => {
         return nonVisibleVoilDocs[0];
     }
 
-    let docUri = vscode.Uri.parse(`untitled:Voil-doc${voilDocs.length}.voil`);
-    let usedDocNames = voilDocs.map((doc)=>getFileNameFromUri(doc.doc.uri));
-
     let newFileIndex: number = 0;
+
+    // unencode file names
+    let usedDocNames = voilDocs.map((doc)=>getFileNameFromUri(doc.doc.uri)).map((name) => decodeURIComponent(name!));
+
     let newFileName: string =  `Voil #${newFileIndex}.voil`;
     while (usedDocNames.includes(newFileName)){
         newFileIndex++;
         newFileName =  `Voil #${newFileIndex}.voil`;
     }
+
+    let docUri = vscode.Uri.parse(`untitled:Voil-doc${newFileIndex}.voil`);
 
     if (extensionDataDir){
         docUri = vscode.Uri.joinPath(extensionDataDir, newFileName);
