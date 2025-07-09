@@ -8,6 +8,7 @@ import { count } from 'console';
 const RUNNING_VOIL_INSTANCES_KEY = 'runningVoilInstances';
 const PATH_TO_IDENTIFIER_MAP_KEY = 'pathToIdentifierMap';
 const IDENTIFIER_TO_PATH_MAP_KEY = 'identifierToPathMap';
+const CUT_IDENTIFIERS_KEY = 'cutIdentifiers';
 const HEADER_LINES = 2;
 const IDENTIFIER_SIZE = 20;
 const METADATA_BEGIN_SYMBOL = "/[";
@@ -106,7 +107,18 @@ function deletePathIdentifier(path: string, identifier: string){
 }
 
 
-var cutIdentifiers = new Set<string>();
+function getCutIdentifiers(): Set<string> {
+    if (vscodeContext != null) {
+        return new Set(vscodeContext.globalState.get<string[]>(CUT_IDENTIFIERS_KEY) ?? []);
+    }
+    return new Set();
+}
+
+async function setCutIdentifiers(cutIds: Set<string>) {
+    if (vscodeContext != null) {
+        await vscodeContext.globalState.update(CUT_IDENTIFIERS_KEY, Array.from(cutIds));
+    }
+}
 
 let config = vscode.workspace.getConfiguration('voil');
 
@@ -312,7 +324,7 @@ const updateCutIdentifiers = async (prevContentOnFile: string, prevContentOnDisk
 
     let cutIds = getCutIdentifiersFromFileContents(prevContentOnDisk, prevContentOnFile);
     if (cutIds.size) {
-        cutIdentifiers = cutIds;
+        await setCutIdentifiers(cutIds);
     }
 };
 
@@ -1250,6 +1262,7 @@ const getModificationsFromContentDiff = (doc: VoilDoc, oldContent: string, newCo
         }
         else {
             if (newItems.length > 0) {
+                let cutIdentifiers = getCutIdentifiers();
                 if (cutIdentifiers.has(identifier)) {
                     let firstItem = newItems[0];
                     let rest = newItems.slice(1);
@@ -1596,7 +1609,7 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         }
 
-        cutIdentifiers.clear();
+        await setCutIdentifiers(new Set());
         doc.enableWatcher();
     });
 
@@ -1843,6 +1856,28 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         })
     );
+
+    let updateCutIdentifiersForEditor = async (editor: vscode.TextEditor) => {
+        let doc = await getVoilDocForEditor(editor);
+        if (doc) {
+            let prevDirectory = doc.currentDir?.toString();
+            // let prevListingContent = await doc.getContentForPath(vscode.Uri.parse(prevDirectory!));
+            let prevListingContent = doc.previousContent;
+            updateCutIdentifiers(doc.doc.getText(), prevListingContent);
+        }
+    };
+
+    context.subscriptions.push(
+        vscode.window.onDidChangeWindowState(async (windowState) => {
+            if (windowState.focused == false){
+                let editor = vscode.window.activeTextEditor;
+                if (editor && editor.document.uri.toString().endsWith('.voil')) {
+                    updateCutIdentifiersForEditor(editor);
+                }
+            }
+        })
+    );
+
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor(async (editor) => {
 
@@ -1855,13 +1890,7 @@ export async function activate(context: vscode.ExtensionContext) {
             let prevEditor = lastFocusedEditor;
             lastFocusedEditor = editor;
             if (prevEditor && prevEditor.document.uri.toString().endsWith('.voil')) {
-                let doc = await getVoilDocForEditor(prevEditor);
-                if (doc) {
-                    let prevDirectory = doc.currentDir?.toString();
-                    // let prevListingContent = await doc.getContentForPath(vscode.Uri.parse(prevDirectory!));
-                    let prevListingContent = doc.previousContent;
-                    updateCutIdentifiers(doc.doc.getText(), prevListingContent);
-                }
+                updateCutIdentifiersForEditor(prevEditor);
             }
 
             // update the statusbar item
