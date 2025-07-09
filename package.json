@@ -152,40 +152,39 @@
     ],
     "configurationDefaults": {
       "editor.tokenColorCustomizations": {
-          "textMateRules": [
-            {
-              "scope": "voil.filetype.txt",
-              "settings": {
-                "foreground": "#cccccc"
-              }
-            },
-            {
-              "scope": "voil.dirtype.dir",
-              "settings": {
-                "foreground": "#3794ff"
-              }
-            },
-            {
-              "scope": "voil.filetype.code",
-              "settings": {
-                "foreground": "#edbbff"
-              }
-            },
-            {
-              "scope": "voil.unlisted",
-              "settings": {
-                "foreground": "#666666"
-              }
-            },
-            {
-              "scope": "voil.filetype.generic",
-              "settings": {
-                "foreground": "#f48771"
-              }
+        "textMateRules": [
+          {
+            "scope": "voil.filetype.txt",
+            "settings": {
+              "foreground": "#cccccc"
             }
-          ]
+          },
+          {
+            "scope": "voil.dirtype.dir",
+            "settings": {
+              "foreground": "#3794ff"
+            }
+          },
+          {
+            "scope": "voil.filetype.code",
+            "settings": {
+              "foreground": "#edbbff"
+            }
+          },
+          {
+            "scope": "voil.unlisted",
+            "settings": {
+              "foreground": "#666666"
+            }
+          },
+          {
+            "scope": "voil.filetype.generic",
+            "settings": {
+              "foreground": "#f48771"
+            }
+          }
+        ]
       }
-
     },
     "configuration": {
       "type": "object",
@@ -193,7 +192,19 @@
       "properties": {
         "voil.previewExtensions": {
           "type": "array",
-          "default": [".txt", ".sh", ".bat", ".py", ".c", ".cpp", ".ts", ".js", ".java", ".rb", ".go"],
+          "default": [
+            ".txt",
+            ".sh",
+            ".bat",
+            ".py",
+            ".c",
+            ".cpp",
+            ".ts",
+            ".js",
+            ".java",
+            ".rb",
+            ".go"
+          ],
           "description": "File extensions that voil will preview automatically."
         },
         "voil.previewAutoOpen": {
@@ -238,14 +249,14 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.96.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
+    "@types/vscode": "^1.96.0",
     "@typescript-eslint/eslint-plugin": "^8.17.0",
     "@typescript-eslint/parser": "^8.17.0",
-    "eslint": "^9.16.0",
-    "typescript": "^5.7.2",
     "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1"
+    "@vscode/test-electron": "^2.4.1",
+    "eslint": "^9.16.0",
+    "typescript": "^5.7.2"
   }
 }

@@ -4,6 +4,10 @@ import * as path from 'path';
 import * as utils from './utils';
 import { count } from 'console';
 
+
+const RUNNING_VOIL_INSTANCES_KEY = 'runningVoilInstances';
+const PATH_TO_IDENTIFIER_MAP_KEY = 'pathToIdentifierMap';
+const IDENTIFIER_TO_PATH_MAP_KEY = 'identifierToPathMap';
 const HEADER_LINES = 2;
 const IDENTIFIER_SIZE = 7;
 const METADATA_BEGIN_SYMBOL = "/[";
@@ -65,13 +69,43 @@ class CustomShellCommand{
     }
 };
 
+class ActivaVoilInstance {
+    uuid: string | null = null;
+    lastUpdateTime: number = Date.now();
+};
+
 // global variables
 var voilPanel: VoilDoc | undefined = undefined;
 var voilDocs: VoilDoc[] = [];
 var previewDoc: vscode.TextDocument | undefined = undefined;
+let vscodeContext: vscode.ExtensionContext | null = null;
+let voilInstanceUuid: string | null = null;
 
-var pathToIdentifierMap: Map<string, string> = new Map();
-var identifierToPathMap: Map<string, string> = new Map();
+// var pathToIdentifierMap: Map<string, string> = new Map();
+// var identifierToPathMap: Map<string, string> = new Map();
+function setPathIdentifier(path: string, identifier: string){
+    if (vscodeContext != null){
+        let pathToIdentifierMap = new Map(Object.entries(vscodeContext.globalState.get<Record<string, string>>(PATH_TO_IDENTIFIER_MAP_KEY) ?? {}));
+        let identifierToPathMap = new Map(Object.entries(vscodeContext.globalState.get<Record<string, string>>(IDENTIFIER_TO_PATH_MAP_KEY) ?? {}));
+        pathToIdentifierMap.set(path, identifier);
+        identifierToPathMap.set(identifier, path);
+        vscodeContext.globalState.update(PATH_TO_IDENTIFIER_MAP_KEY, Object.fromEntries(pathToIdentifierMap));
+        vscodeContext.globalState.update(IDENTIFIER_TO_PATH_MAP_KEY, Object.fromEntries(identifierToPathMap));
+    }
+}
+
+function deletePathIdentifier(path: string, identifier: string){
+    if (vscodeContext != null){
+        let pathToIdentifierMap = new Map(Object.entries(vscodeContext.globalState.get<Record<string, string>>(PATH_TO_IDENTIFIER_MAP_KEY) ?? {}));
+        let identifierToPathMap = new Map(Object.entries(vscodeContext.globalState.get<Record<string, string>>(IDENTIFIER_TO_PATH_MAP_KEY) ?? {}));
+        pathToIdentifierMap.delete(path);
+        identifierToPathMap.delete(identifier);
+        vscodeContext.globalState.update(PATH_TO_IDENTIFIER_MAP_KEY, Object.fromEntries(pathToIdentifierMap));
+        vscodeContext.globalState.update(IDENTIFIER_TO_PATH_MAP_KEY, Object.fromEntries(identifierToPathMap));
+    }
+}
+
+
 var cutIdentifiers = new Set<string>();
 
 let config = vscode.workspace.getConfiguration('voil');
@@ -392,6 +426,9 @@ let generateRandomString = (length: number) => {
 };
 
 let getIdentifierForPath = (path: string) => {
+    let pathToIdentifierMap = new Map(Object.entries(vscodeContext?.globalState.get<Record<string, string>>(PATH_TO_IDENTIFIER_MAP_KEY) ?? {}));
+    let identifierToPathMap = new Map(Object.entries(vscodeContext?.globalState.get<Record<string, string>>(IDENTIFIER_TO_PATH_MAP_KEY) ?? {}));
+
     if (pathToIdentifierMap.has(path)) {
         return pathToIdentifierMap.get(path)!;
     }
@@ -403,6 +440,11 @@ let getIdentifierForPath = (path: string) => {
 
     pathToIdentifierMap.set(path, identifier);
     identifierToPathMap.set(identifier, path);
+    
+    if (vscodeContext) {
+        vscodeContext.globalState.update(PATH_TO_IDENTIFIER_MAP_KEY, Object.fromEntries(pathToIdentifierMap));
+        vscodeContext.globalState.update(IDENTIFIER_TO_PATH_MAP_KEY, Object.fromEntries(identifierToPathMap));
+    }
     return identifier;
 }
 
@@ -741,6 +783,9 @@ class VoilDoc {
         let content = '';
         content += this.getCurrentDirPath() + "\n";
 
+        // get the size of PATH_TO_IDENTIFIER_MAP_KEY
+        let stateSize = Object.keys(vscodeContext?.globalState.get<Record<string, string>>(PATH_TO_IDENTIFIER_MAP_KEY) ?? {}).length;
+
         let headerSeparator = '';
         for (let i = 0; i < this.getCurrentDirPath().length; i++){
             headerSeparator += '=';
@@ -1054,6 +1099,7 @@ let getPreviewDoc = async () => {
 };
 
 let getPathForIdentifier = (identifier: string) => {
+    let identifierToPathMap = new Map(Object.entries(vscodeContext?.globalState.get<Record<string, string>>('identifierToPathMap') ?? {}));
     if (identifierToPathMap.has(identifier)) {
         return identifierToPathMap.get(identifier);
     }
@@ -1186,7 +1232,36 @@ const getModificationsFromContentDiff = (doc: VoilDoc, oldContent: string, newCo
     return { copiedIdentifiers, movedIdentifiers, renamedIdentifiers, deletedIdentifiers };
 }
 
-export function activate(context: vscode.ExtensionContext) {
+async function updateCurrentInstanceUuid(){
+    let activeVoilInstance: ActivaVoilInstance = {
+        uuid: voilInstanceUuid,
+        lastUpdateTime: Date.now()
+    };
+
+    let runningVoilInstances = vscodeContext?.globalState.get<ActivaVoilInstance[]>(RUNNING_VOIL_INSTANCES_KEY) || [];
+
+    let existingInstanceIndex = runningVoilInstances.findIndex((instance) => instance.uuid === voilInstanceUuid);
+    if (existingInstanceIndex !== -1) {
+        runningVoilInstances[existingInstanceIndex] = activeVoilInstance;
+    }
+    else {
+        runningVoilInstances.push(activeVoilInstance);
+    }
+    await vscodeContext?.globalState.update(RUNNING_VOIL_INSTANCES_KEY, runningVoilInstances);
+
+}
+
+export async function activate(context: vscode.ExtensionContext) {
+    voilInstanceUuid = generateRandomString(16);
+    vscodeContext = context;
+
+    await cleanupOldData();
+    await updateCurrentInstanceUuid();
+
+    setTimeout(() => {
+        updateCurrentInstanceUuid();
+    }, 1000 * 60 * 5); // update every 5 minutes
+
     // var currentDir = vscode.workspace.workspaceFolders?.[0].uri;
 
     // const countKey = 'voil.count';
@@ -1362,8 +1437,9 @@ export function activate(context: vscode.ExtensionContext) {
                     await vscode.workspace.fs.copy(vscode.Uri.parse(originalPath), vscode.Uri.parse(newPath));
 
                     let newIdentifier = getIdentifierForPath(newPath);
-                    pathToIdentifierMap.set(newPath, newIdentifier);
-                    identifierToPathMap.set(newIdentifier, newPath);
+                    setPathIdentifier(newPath, newIdentifier);
+                    // pathToIdentifierMap.set(newPath, newIdentifier);
+                    // identifierToPathMap.set(newIdentifier, newPath);
                     newNames.push(item.name);
                 }
             }
@@ -1396,8 +1472,7 @@ export function activate(context: vscode.ExtensionContext) {
                             }
                         }
 
-                        pathToIdentifierMap.delete(path);
-                        identifierToPathMap.delete(identifier);
+                        deletePathIdentifier(path, identifier);
 
                     }
 
@@ -1409,10 +1484,8 @@ export function activate(context: vscode.ExtensionContext) {
                     if (originalPath && newPath) {
                         await vscode.workspace.fs.rename(vscode.Uri.parse(originalPath), vscode.Uri.parse(newPath));
 
-                        pathToIdentifierMap.delete(originalPath);
-                        pathToIdentifierMap.set(newPath, identifier);
-                        identifierToPathMap.delete(identifier);
-                        identifierToPathMap.set(identifier, newPath);
+                        deletePathIdentifier(originalPath, identifier);
+                        setPathIdentifier(newPath, identifier);
                         newNames.push(item.newData.name);
                     }
                 }
@@ -1422,10 +1495,8 @@ export function activate(context: vscode.ExtensionContext) {
                     let newPath = vscode.Uri.joinPath(doc.currentDir!, item.newData.name).toString();
                     if (originalPath && newPath) {
                         await vscode.workspace.fs.rename(vscode.Uri.parse(originalPath), vscode.Uri.parse(newPath));
-                        pathToIdentifierMap.delete(originalPath);
-                        pathToIdentifierMap.set(newPath, identifier);
-                        identifierToPathMap.delete(identifier);
-                        identifierToPathMap.set(identifier, newPath);
+                        deletePathIdentifier(originalPath, identifier);
+                        setPathIdentifier(newPath, identifier);
                         newNames.push(item.newData.name);
                     }
                 }
@@ -1858,6 +1929,25 @@ export function activate(context: vscode.ExtensionContext) {
     filterStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
     filterStatusBarItem.text = "$(search) filter: (none)";
     // filterStatusBarItem.show();
+}
+
+async function cleanupOldData() {
+    if (vscodeContext){
+        let runningVoilInstances = vscodeContext.globalState.get<ActivaVoilInstance[]>(RUNNING_VOIL_INSTANCES_KEY) || [];
+        runningVoilInstances = runningVoilInstances.filter((instance) => {
+            return (Date.now() - instance.lastUpdateTime < 1000 * 60 * 5);
+        });
+
+        if (runningVoilInstances.length === 0) {
+            // clear the global state if there are no running instances
+            await vscodeContext.globalState.update(RUNNING_VOIL_INSTANCES_KEY, undefined);
+            await vscodeContext.globalState.update(PATH_TO_IDENTIFIER_MAP_KEY, undefined);
+            await vscodeContext.globalState.update(IDENTIFIER_TO_PATH_MAP_KEY, undefined);
+        }
+        else {
+            vscodeContext.globalState.update(RUNNING_VOIL_INSTANCES_KEY, runningVoilInstances);
+        }
+    }
 }
 
 export function deactivate() {
