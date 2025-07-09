@@ -520,7 +520,7 @@ class VoilDoc {
         await updateDocContentToCurrentDir(this);
     }
 
-    openTerminal(initialPath: string){
+    openTerminal(initialPath: vscode.Uri){
 
         if (this.terminal == undefined) {
             this.terminal = vscode.window.createTerminal({
@@ -538,7 +538,18 @@ class VoilDoc {
                 });
             }
             else{
-                this.terminal.sendText(`cd "${initialPath}"`);
+                let targetPath = decodeURIComponent(initialPath.toString());
+                if (targetPath.startsWith('file://')) {
+                    targetPath = targetPath.slice(7);
+                }
+
+                if (targetPath.startsWith('vscode-remote://')) {
+                    let firstPlusIndex = targetPath.indexOf('+');
+                    targetPath = targetPath.slice(firstPlusIndex + 1);
+                    let firstSlashAfterPlusIndex = targetPath.indexOf('/');
+                    targetPath = targetPath.slice(firstSlashAfterPlusIndex);
+                }
+                this.terminal.sendText(`cd "${targetPath}"`);
             }
             return this.terminal;
         }
@@ -794,7 +805,7 @@ class VoilDoc {
 
 
     getCurrentDirPath(){
-        let currentPath = this.currentDirectory.toString();
+        let currentPath = decodeURIComponent(this.currentDirectory.toString());
         if (currentPath.startsWith('file://')) {
             currentPath = currentPath.slice(7);
         }
@@ -1665,7 +1676,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 // when we press enter on the current path at the top, open it in the file explorer
                 if (currentCursorLineIndex == 0){
 
-                    let terminal = doc.openTerminal(doc.getCurrentDirPath());
+                    let terminal = doc.openTerminal(doc.currentDirectory);
                     if (terminal) {
                         terminal.show();
                     }
