@@ -1717,17 +1717,24 @@ export async function activate(context: vscode.ExtensionContext) {
             else{
                 // open file
                 let fileUri = vscode.Uri.joinPath(doc.currentDir!, currentDirName!);
-                let newdoc = await vscode.workspace.openTextDocument(fileUri);
+                try{
+                    let newdoc = await vscode.workspace.openTextDocument(fileUri);
+                    // if we don't close the voil windows, vscode will show an annoying "do you want to save changes" dialog
+                    voilDocs = voilDocs.filter((d) => d !== doc);
+                    doc.handleClose();
+                    await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
 
-                // if we don't close the voil windows, vscode will show an annoying "do you want to save changes" dialog
-                voilDocs = voilDocs.filter((d) => d !== doc);
-                doc.handleClose();
-                await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
-                
-                await vscode.window.showTextDocument(newdoc);
-                if (doc.hasPreview){
-                    await hidePreviewWindow();
+                    await vscode.window.showTextDocument(newdoc);
+                    if (doc.hasPreview) {
+                        await hidePreviewWindow();
+                    }
                 }
+                catch (e) {
+                    await vscode.commands.executeCommand('vscode.open', fileUri);
+                    // await vscode.window.showErrorMessage(`Could not open file: ${currentDirName}`);
+                    return;
+                }
+
             }
         }
 
@@ -1987,6 +1994,7 @@ async function cleanupOldData() {
         runningVoilInstances = runningVoilInstances.filter((instance) => {
             return (Date.now() - instance.lastUpdateTime < 1000 * 60 * 5);
         });
+
 
         if (runningVoilInstances.length === 0) {
             // clear the global state if there are no running instances
