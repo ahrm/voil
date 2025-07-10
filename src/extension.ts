@@ -1803,7 +1803,7 @@ export async function activate(context: vscode.ExtensionContext) {
         let currentDocumentName = undefined;
         if (currentDocumentPath){
             if (!currentDocumentPath.toString().endsWith(".voil")){
-                currentDocumentName = path.basename(currentDocumentPath.toString());
+                currentDocumentName = decodeURIComponent(path.basename(currentDocumentPath.toString()));
                 parentUri = vscode.Uri.joinPath(currentDocumentPath!, '..');
             }
         }
@@ -1819,7 +1819,7 @@ export async function activate(context: vscode.ExtensionContext) {
         let currentDocumentName = undefined;
         if (currentDocumentPath){
             if (!currentDocumentPath.toString().endsWith(".voil")){
-                currentDocumentName = path.basename(currentDocumentPath.toString());
+                currentDocumentName = decodeURIComponent(path.basename(currentDocumentPath.toString()));
                 parentUri = vscode.Uri.joinPath(currentDocumentPath!, '..');
             }
         }
