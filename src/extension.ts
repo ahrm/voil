@@ -36,6 +36,15 @@ function getFileNameFromUri(uri: vscode.Uri){
     return uri.toString().split(sep).pop();
 }
 
+function getIconForFileType(ext: string): string {
+    if (fileTypeIcons.hasOwnProperty(ext)) {
+        return fileTypeIcons[ext] + ' ';
+    }
+    else {
+        return '📄 ';
+    }
+}
+
 class CustomShellCommand{
     name: string;
     id: string;
@@ -123,6 +132,8 @@ async function setCutIdentifiers(cutIds: Set<string>) {
 let config = vscode.workspace.getConfiguration('voil');
 
 let previewEnabled = config.get<boolean>('previewAutoOpen') ?? false;
+let showIcons = config.get<boolean>('showIcons') ?? false;
+let fileTypeIcons = config.get<Record<string, string>>('fileTypeIcons') ?? {};
 let allowFocusOnIdentifier = config.get<boolean>('allowFocusOnIdentifier') ?? false;
 let hideIdentifier = config.get<boolean>('hideIdentifier') ?? true;
 let recursiveListingMaxDepth = config.get<number>('recursiveListingMaxDepth') ?? 10;
@@ -282,9 +293,17 @@ const parseLine = (line: string): DirectoryListingData => {
         let identifier = parts[0].slice(1);
         let typeString = parts[1];
         let name = parts.slice(2).join(' ').trim();
+        let isDir = typeString === '/';
+
+        if (showIcons && !isDir){
+            // skip until the next space
+            let nextSpaceIndex = name.indexOf(' ');
+            name = name.slice(nextSpaceIndex + 1);
+        }
+
         return {
             identifier: identifier,
-            isDir: typeString === '/',
+            isDir: isDir,
             name: name,
             isNew: false
         };
@@ -957,9 +976,17 @@ class VoilDoc {
             }
 
             let dirPostfix = isDir ? '/' : '';
+
+            let icon = '';
+            // let icon = isDir ? '' : 'f ';
+            if (showIcons && !isDir) {
+                let fileExtension = file[0].split('.').slice(-1)[0];
+                icon = getIconForFileType(fileExtension);
+            }
+
             // pad line content to maxMetadataSize
             lineContent = lineContent.padEnd(maxMetadataSize, ' ');
-            content += `/${lineContent}${file[0]}${dirPostfix}\n`;
+            content += `/${lineContent}${icon}${file[0]}${dirPostfix}\n`;
         }
         this.previousContent = content;
         return content;
@@ -1339,6 +1366,8 @@ export async function activate(context: vscode.ExtensionContext) {
         context.globalState
         config = vscode.workspace.getConfiguration('voil');
         previewEnabled = config.get<boolean>('previewAutoOpen') ?? false;
+        showIcons = config.get<boolean>('showIcons') ?? false;
+        fileTypeIcons = config.get<Record<string, string>>('fileTypeIcons') ?? {};
         allowFocusOnIdentifier = config.get<boolean>('allowFocusOnIdentifier') ?? false;
         hideIdentifier = config.get<boolean>('hideIdentifier') ?? true;
         customShellCommands_ = config.get<CustomShellCommand[]>('customShellCommands');
