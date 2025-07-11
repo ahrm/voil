@@ -49,11 +49,13 @@ class CustomShellCommand{
     name: string;
     id: string;
     cmd: string;
+    embeddedShell: boolean = false;
 
-    constructor(name: string, id: string, cmd: string){
+    constructor(name: string, id: string, cmd: string, embeddedShell: boolean = false) {
         this.name = name;
         this.id = id;
         this.cmd = cmd;
+        this.embeddedShell = embeddedShell;
     }
 
     async getInputs(){
@@ -415,16 +417,28 @@ let updateDocContentToCurrentDir = async (doc: VoilDoc, prevDirectory: string | 
 
 };
 
-const runShellCommand = (cmd: string, rootDir: string) => {
-    const exec = require('child_process').exec;
-    exec(cmd, { cwd: rootDir }, (error: any, stdout: any, stderr: any) => {
-        if (error) {
-            console.error(`exec error: ${error}`);
-            return;
+const runShellCommand = (doc: VoilDoc, cmd: string, rootDir: string, useEmbeddedShell: boolean) => {
+    if (!useEmbeddedShell){
+        const exec = require('child_process').exec;
+        exec(cmd, { cwd: rootDir }, (error: any, stdout: any, stderr: any) => {
+            if (error) {
+                console.error(`exec error: ${error}`);
+                return;
+            }
+            console.log(`stdout: ${stdout}`);
+            console.error(`stderr: ${stderr}`);
+        });
+    }
+    else{
+        let terminal = doc.openTerminal(doc.currentDirectory);
+        if (terminal) {
+            terminal.show();
+            terminal.sendText(cmd);
+        } else {
+            vscode.window.showErrorMessage("Could not open terminal");
         }
-        console.log(`stdout: ${stdout}`);
-        console.error(`stderr: ${stderr}`);
-    });
+
+    }
 };
 
 const fileNameSorter = (a: [string, vscode.FileType], b: [string, vscode.FileType]) => {
@@ -713,7 +727,7 @@ class VoilDoc {
         return selectedItems;
     }
 
-    runShellCommandOnSelectedItems(cmd: string) {
+    runShellCommandOnSelectedItems(cmd: string, useEmbeddedShell: boolean = true) {
         // if the command contains ${file}, we run it for each selected file
         // if the command contains ${files}, we run it for all selected files at once
 
@@ -726,7 +740,7 @@ class VoilDoc {
         }
 
         const mapFilenameToPath = (filename: string) => {
-            let res = vscode.Uri.joinPath(this.currentDir!, filename).toString();
+            let res = vscode.Uri.joinPath(this.currentDir!, filename).fsPath;
             if (res[0] == "/" && (process.platform === "win32")) {
                 res = res.slice(1);
             }
@@ -739,14 +753,14 @@ class VoilDoc {
 
             let batchCmd = cmd.replace('${files}', filesString);
             batchCmd = batchCmd.replace('${filenames}', fileNamesString);
-            runShellCommand(batchCmd, rootDir);
+            runShellCommand(this, batchCmd, rootDir, useEmbeddedShell);
         }
         else {
             for (let { name } of items) {
                 var fullPath = mapFilenameToPath(name);
                 let commandToRun = cmd.replace('${file}', fullPath);
                 commandToRun = commandToRun.replace('${filename}', name);
-                runShellCommand(commandToRun, rootDir);
+                runShellCommand(this, commandToRun, rootDir, useEmbeddedShell);
             }
         }
     }
@@ -1410,7 +1424,7 @@ export async function activate(context: vscode.ExtensionContext) {
         if (cmd && voil){
             let cmdWithInputs = await cmd.getInputs();
             if (cmdWithInputs){
-                voil.runShellCommandOnSelectedItems(cmdWithInputs);
+                voil.runShellCommandOnSelectedItems(cmdWithInputs, cmd.embeddedShell);
             }
         }
     });
