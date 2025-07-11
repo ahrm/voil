@@ -3,6 +3,7 @@ import * as path from 'path';
 
 import * as utils from './utils';
 import { count } from 'console';
+import {exec} from 'child_process';
 
 
 const RUNNING_VOIL_INSTANCES_KEY = 'runningVoilInstances';
@@ -51,7 +52,7 @@ class CustomShellCommand{
     cmd: string;
     embeddedShell: boolean = false;
 
-    constructor(name: string, id: string, cmd: string, embeddedShell: boolean = false) {
+    constructor(name: string, id: string, cmd: string, embeddedShell: boolean = true) {
         this.name = name;
         this.id = id;
         this.cmd = cmd;
@@ -141,7 +142,7 @@ let hideIdentifier = config.get<boolean>('hideIdentifier') ?? true;
 let recursiveListingMaxDepth = config.get<number>('recursiveListingMaxDepth') ?? 10;
 let customShellCommands_ = config.get<CustomShellCommand[]>('customShellCommands');
 let trashDirectory = config.get<string>('trashDirectory') ?? "";
-let customShellCommands = customShellCommands_?.map((cmd) => new CustomShellCommand(cmd.name, cmd.id, cmd.cmd));
+let customShellCommands = customShellCommands_?.map((cmd) => new CustomShellCommand(cmd.name, cmd.id, cmd.cmd, cmd.embeddedShell));
 var savedEditorLayout: SavedEditorLayout | undefined = undefined;
 
 class DirectoryListingData {
@@ -419,7 +420,7 @@ let updateDocContentToCurrentDir = async (doc: VoilDoc, prevDirectory: string | 
 
 const runShellCommand = (doc: VoilDoc, cmd: string, rootDir: string, useEmbeddedShell: boolean) => {
     if (!useEmbeddedShell){
-        const exec = require('child_process').exec;
+        // const exec = require('child_process').exec;
         exec(cmd, { cwd: rootDir }, (error: any, stdout: any, stderr: any) => {
             if (error) {
                 console.error(`exec error: ${error}`);
@@ -428,11 +429,12 @@ const runShellCommand = (doc: VoilDoc, cmd: string, rootDir: string, useEmbedded
             console.log(`stdout: ${stdout}`);
             console.error(`stderr: ${stderr}`);
         });
+
     }
     else{
         let terminal = doc.openTerminal(doc.currentDirectory);
         if (terminal) {
-            terminal.show();
+            // terminal.show();
             terminal.sendText(cmd);
         } else {
             vscode.window.showErrorMessage("Could not open terminal");
@@ -1429,6 +1431,28 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    const runPredefinedShellCommandOnSelection = vscode.commands.registerCommand('voil.runPredefinedShellCommandOnSelection', async () => {
+        // show a list of predefined shell commands using vscode ui 
+
+        if (customShellCommands){
+            let cmdString = await vscode.window.showQuickPick(customShellCommands.map(cmd => cmd.name), {
+                placeHolder: 'Select a shell command to run on selected items'
+            });
+            let cmd = customShellCommands.find((cmd) => cmd.name === cmdString);
+            let voil = await getVoilDocForActiveEditor();
+
+            if (cmd && voil) {
+                let cmdWithInputs = await cmd.getInputs();
+                if (cmdWithInputs) {
+                    voil.runShellCommandOnSelectedItems(cmdWithInputs, cmd.embeddedShell);
+                }
+            }
+
+        }
+
+    });
+
+
     const toggleFileSizeCommand = vscode.commands.registerCommand('voil.toggleFileSize', async () => {
         let voil = await getVoilDocForActiveEditor();
         if (voil !== undefined){
@@ -1899,6 +1923,7 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(openVoilDocCurrentDir);
     context.subscriptions.push(runShellCommandOnSelectionCommand);
     context.subscriptions.push(runShellCommandWithIdOnSelectionCommand);
+    context.subscriptions.push(runPredefinedShellCommandOnSelection);
     context.subscriptions.push(toggleFileSizeCommand);
     context.subscriptions.push(toggleCreationDateCommand);
     context.subscriptions.push(sortByFileNameCommand);

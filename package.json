@@ -119,6 +119,10 @@
         "title": "voil: run shell command on selected items"
       },
       {
+        "command": "voil.runPredefinedShellCommandOnSelection",
+        "title": "voil: Select a predefined command and run it on the selected items"
+      },
+      {
         "command": "voil.openCurrentDirectory",
         "title": "voil: Open the current directory in the default file explorer"
       }
@@ -371,7 +375,32 @@
         "voil.customShellCommands": {
           "type": "array",
           "default": [],
-          "description": "Custom shell commands that can be run on selected items."
+          "description": "Custom shell commands that can be run on selected items.",
+          "items": {
+            "type": "object",
+            "title": "CustomShellCommand",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name of the command."
+              },
+              "id": {
+                "type": "string",
+                "description": "Unique id for the command (this is used for keybindings)."
+              },
+              "cmd": {
+                "type": "string",
+                "description": "The shell command to execute."
+              },
+              "embeddedShell": {
+                "type": "boolean",
+                "description": "Whether to use the vscode's embedded shell or an external shell to run the command.",
+                "default": true
+              }
+            }
+
+          }
+
         }
       }
     }
