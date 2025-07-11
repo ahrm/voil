@@ -2,6 +2,17 @@
   "scopeName": "source.voil",
   "patterns": [
   {
+    "match": "\\A(.*/)(.*?)$",
+    "captures": {
+      "1": {
+        "name": "voil.currentDirectory"
+      },
+      "2": {
+        "name": "voil.currentDirectoryGlob"
+      }
+    }
+  },
+  {
     "match": "^\\/[a-zA-Z]{20} - .*\\.txt$",
     "name": "voil.filetype.txt"
   },

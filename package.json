@@ -160,6 +160,19 @@
             }
           },
           {
+              "scope": "voil.currentDirectory",
+              "settings": {
+                  "foreground": "#666666"
+              }
+          },
+          {
+              "scope": "voil.currentDirectoryGlob",
+              "settings": {
+                  "foreground": "#cccccc"
+              }
+          },
+          
+          {
             "scope": "voil.dirtype.dir",
             "settings": {
               "foreground": "#3794ff"
