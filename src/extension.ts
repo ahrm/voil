@@ -598,7 +598,17 @@ class VoilDoc {
     }
 
     setFilterPattern(pattern: string) {
-        this.filterString = pattern;
+        if (pattern.length == 0){
+            this.filterString = "";
+        }
+        else{
+            this.filterString = "*" + pattern + "*";
+            updateStatusbar(this);
+        }
+    }
+
+    setFilterPatternGlob(glob: string) {
+        this.filterString = glob;
         updateStatusbar(this);
     }
 
@@ -840,6 +850,10 @@ class VoilDoc {
         if (currentPath.startsWith('file://')) {
             currentPath = currentPath.slice(7);
         }
+        // add the final / if it doesnt exist
+        if (!currentPath.endsWith('/')) {
+            currentPath += '/';
+        }
         return currentPath;
     }
 
@@ -850,13 +864,14 @@ class VoilDoc {
         }
         let currentPath = rootUri.toString();
         let content = '';
-        content += this.getCurrentDirPath() + "\n";
+        let filterContent = this.filterString;
+        content += this.getCurrentDirPath() + filterContent + "\n";
 
         // get the size of PATH_TO_IDENTIFIER_MAP_KEY
         let stateSize = Object.keys(vscodeContext?.globalState.get<Record<string, string>>(PATH_TO_IDENTIFIER_MAP_KEY) ?? {}).length;
 
         let headerSeparator = '';
-        for (let i = 0; i < this.getCurrentDirPath().length; i++){
+        for (let i = 0; i < content.length-1; i++){
             headerSeparator += '=';
         }
         content += headerSeparator + "\n";
@@ -949,7 +964,9 @@ class VoilDoc {
 
             // we don't want to filter the content of previews
             if (!isPreview) {
-                if (this.filterString && !file[0].includes(this.filterString)) {
+                let regex = utils.globToRegex(this.filterString);
+
+                if (this.filterString && !regex.test(file[0])) {
                     continue;
                 }
             }
@@ -1501,11 +1518,27 @@ export async function activate(context: vscode.ExtensionContext) {
         let currentTargetPath = content.split("\n")[0];
         let originalTargetPath = originalContent.split("\n")[0];
         if (currentTargetPath !== originalTargetPath){
+            // ignore the original target path after the last slash
+            originalTargetPath = originalTargetPath.slice(0, originalTargetPath.lastIndexOf('/') + 1);
 
-            doc.currentDir = vscode.Uri.parse(currentTargetPath);
-            await updateDocContentToCurrentDir(doc);
-            doc.enableWatcher();
-            return;
+            let newUri = vscode.Uri.parse(currentTargetPath);
+            let exists = await vscode.workspace.fs.stat(newUri).then(() => true, () => false);
+            if (exists){
+                doc.currentDir = newUri;
+                doc.setFilterPatternGlob('');
+                await updateDocContentToCurrentDir(doc);
+                doc.enableWatcher();
+                return;
+            }
+            else{
+                if (currentTargetPath.startsWith(originalTargetPath)){
+                    let filterString = currentTargetPath.slice(originalTargetPath.length);
+                    doc.setFilterPatternGlob(filterString);
+                    await updateDocContentToCurrentDir(doc);
+                    doc.enableWatcher();
+                    return;
+                }
+            }
         }
 
         let { copiedIdentifiers, movedIdentifiers, renamedIdentifiers, deletedIdentifiers } = getModificationsFromContentDiff(doc, originalContent, content);
