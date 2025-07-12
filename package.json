@@ -40,91 +40,91 @@
     "commands": [
       {
         "command": "voil.openPanel",
-        "title": "voil: Open voil panel at workspace root"
+        "title": "Voil: Open voil panel at workspace root"
       },
       {
         "command": "voil.openPanelCurrentDir",
-        "title": "voil: Open voil panel at current directory"
+        "title": "Voil: Open voil panel at current directory"
       },
       {
         "command": "voil.toggleRecursive",
-        "title": "voil: Toggle recursive listing"
+        "title": "Voil: Toggle recursive listing"
       },
       {
         "command": "voil.previous",
-        "title": "voil: Go to the previous directory"
+        "title": "Voil: Go to the previous directory"
       },
       {
         "command": "voil.next",
-        "title": "voil: Go to the next directory"
+        "title": "Voil: Go to the next directory"
       },
       {
         "command": "voil.gotoParentDir",
-        "title": "voil: Go to parent directory"
+        "title": "Voil: Go to parent directory"
       },
       {
         "command": "voil.setFilter",
-        "title": "voil: Filter files"
+        "title": "Voil: Filter files"
       },
       {
         "command": "voil.toggleFileSize",
-        "title": "voil: toggle file size"
+        "title": "Voil: Toggle file size"
       },
       {
         "command": "voil.toggleCreationDate",
-        "title": "voil: toggle file creation date"
+        "title": "Voil: Toggle file creation date"
       },
       {
         "command": "voil.sortByFileName",
-        "title": "voil: sort by file name"
+        "title": "Voil: Sort by file name"
       },
       {
         "command": "voil.enter",
-        "title": "voil: Enter the current selected item."
+        "title": "Voil: Enter the current selected item."
       },
       {
         "command": "voil.preview",
-        "title": "voil: Open a preview to current selected item."
+        "title": "Voil: Open a preview to current selected item."
       },
       {
         "command": "voil.close",
-        "title": "voil: Close the voil window."
+        "title": "Voil: Close the voil window."
       },
       {
         "command": "voil.save",
-        "title": "voil: Apply the changes to filesystem."
+        "title": "Voil: Apply the changes to filesystem."
       },
       {
         "command": "voil.sortByFileType",
-        "title": "voil: sort by file type"
+        "title": "Voil: Sort by file type"
       },
       {
         "command": "voil.sortByFileCreationTime",
-        "title": "voil: sort by file creation time"
+        "title": "Voil: Sort by file creation time"
       },
       {
         "command": "voil.sortByFileSize",
-        "title": "voil: sort by file size"
+        "title": "Voil: Sort by file size"
       },
       {
         "command": "voil.toggleSortOrder",
-        "title": "voil: toggle sort order"
+        "title": "Voil: Toggle sort order"
       },
       {
         "command": "voil.cd",
-        "title": "voil: set the current directory"
+        "title": "Voil: Set the current directory"
       },
       {
         "command": "voil.runShellCommandOnSelection",
-        "title": "voil: run shell command on selected items"
+        "title": "Voil: Run shell command on selected items"
       },
       {
         "command": "voil.runPredefinedShellCommandOnSelection",
-        "title": "voil: Run predefined shell command"
+        "title": "Voil: Run predefined shell command"
       },
       {
         "command": "voil.openCurrentDirectory",
-        "title": "voil: Open the current directory in the default file explorer"
+        "title": "Voil: Open the current directory in the default file explorer"
       }
     ],
     "keybindings": [
