@@ -120,7 +120,7 @@
       },
       {
         "command": "voil.runPredefinedShellCommandOnSelection",
-        "title": "voil: Select a predefined command and run it on the selected items"
+        "title": "voil: Run predefined shell command"
       },
       {
         "command": "voil.openCurrentDirectory",

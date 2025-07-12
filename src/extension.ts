@@ -436,6 +436,7 @@ const runShellCommand = (doc: VoilDoc, cmd: string, rootDir: string, useEmbedded
         if (terminal) {
             // terminal.show();
             terminal.sendText(cmd);
+
         } else {
             vscode.window.showErrorMessage("Could not open terminal");
         }
@@ -753,16 +754,29 @@ class VoilDoc {
             let filesString = items.map(({ name }) => mapFilenameToPath(name)).join(' ');
             let fileNamesString = items.map(({ name }) => name).join(' ');
 
-            let batchCmd = cmd.replace('${files}', filesString);
-            batchCmd = batchCmd.replace('${filenames}', fileNamesString);
+            let batchCmd = cmd.replaceAll('${files}', filesString);
+            batchCmd = batchCmd.replaceAll('${filenames}', fileNamesString);
             runShellCommand(this, batchCmd, rootDir, useEmbeddedShell);
         }
         else {
-            for (let { name } of items) {
-                var fullPath = mapFilenameToPath(name);
-                let commandToRun = cmd.replace('${file}', fullPath);
-                commandToRun = commandToRun.replace('${filename}', name);
-                runShellCommand(this, commandToRun, rootDir, useEmbeddedShell);
+            if (useEmbeddedShell){
+
+                let commandsStr = ''
+                for (let { name } of items) {
+                    var fullPath = mapFilenameToPath(name);
+                    let commandToRun = cmd.replaceAll('${file}', fullPath);
+                    commandToRun = commandToRun.replaceAll('${filename}', name);
+                    commandsStr += commandToRun + '\n';
+                }
+                runShellCommand(this, commandsStr, rootDir, true);
+            }
+            else{
+                for (let { name } of items) {
+                    var fullPath = mapFilenameToPath(name);
+                    let commandToRun = cmd.replaceAll('${file}', fullPath);
+                    commandToRun = commandToRun.replaceAll('${filename}', name);
+                    runShellCommand(this, commandToRun, rootDir, useEmbeddedShell);
+                }
             }
         }
     }
