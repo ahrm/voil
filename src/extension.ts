@@ -137,12 +137,13 @@ let config = vscode.workspace.getConfiguration('voil');
 
 let previewEnabled = config.get<boolean>('previewAutoOpen') ?? false;
 let showIcons = config.get<boolean>('showIcons') ?? false;
+let trashEnabled = config.get<boolean>('trash') ?? true;
+let showConfirmation = config.get<boolean>('confirmDelete') ?? true;
 let fileTypeIcons = config.get<Record<string, string>>('fileTypeIcons') ?? {};
 let allowFocusOnIdentifier = config.get<boolean>('allowFocusOnIdentifier') ?? false;
 let hideIdentifier = config.get<boolean>('hideIdentifier') ?? true;
 let recursiveListingMaxDepth = config.get<number>('recursiveListingMaxDepth') ?? 10;
 let customShellCommands_ = config.get<CustomShellCommand[]>('customShellCommands');
-let trashDirectory = config.get<string>('trashDirectory') ?? "";
 let customShellCommands = customShellCommands_?.map((cmd) => new CustomShellCommand(cmd.name, cmd.id, cmd.cmd, cmd.embeddedShell));
 var savedEditorLayout: SavedEditorLayout | undefined = undefined;
 let trashDir: vscode.Uri;
@@ -1492,12 +1493,13 @@ export async function activate(context: vscode.ExtensionContext) {
         config = vscode.workspace.getConfiguration('voil');
         previewEnabled = config.get<boolean>('previewAutoOpen') ?? false;
         showIcons = config.get<boolean>('showIcons') ?? false;
+        trashEnabled = config.get<boolean>('trash') ?? true;
+        showConfirmation = config.get<boolean>('confirmDelete') ?? true;
         fileTypeIcons = config.get<Record<string, string>>('fileTypeIcons') ?? {};
         allowFocusOnIdentifier = config.get<boolean>('allowFocusOnIdentifier') ?? false;
         hideIdentifier = config.get<boolean>('hideIdentifier') ?? true;
         customShellCommands_ = config.get<CustomShellCommand[]>('customShellCommands');
         customShellCommands = customShellCommands_?.map((cmd) => new CustomShellCommand(cmd.name, cmd.id, cmd.cmd));
-        trashDirectory = config.get<string>('trashDirectory') ?? "";
         recursiveListingMaxDepth = config.get<number>('recursiveListingMaxDepth') ?? 10;
     });
 
@@ -1634,6 +1636,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
 
     const handleUndo = vscode.commands.registerCommand('voil.undo', async () => {
+        if (!trashEnabled) {
+            vscode.window.showWarningMessage('Undo is not available when the trash setting is disabled.');
+            return;
+        }
         let doc = await getVoilDocForActiveEditor();
         if (doc){
             await doc.undoLastOperation();
@@ -1704,9 +1710,16 @@ export async function activate(context: vscode.ExtensionContext) {
         }
 
         if (deletedIdentifiers.size > 0 || renamedIdentifiers.size > 0 || movedIdentifiers.size > 0){
-            let response = await showDeleteConfirmation(deletedIdentifiers, renamedIdentifiers, movedIdentifiers);
+            let shouldShowConfirmation = !trashEnabled || showConfirmation;
 
-            await doc.addOperations(deletedIdentifiers, renamedIdentifiers, movedIdentifiers);
+            let response = 'Yes';
+            if (shouldShowConfirmation){
+                response = await showDeleteConfirmation(deletedIdentifiers, renamedIdentifiers, movedIdentifiers);
+            }
+
+            if (trashEnabled){
+                await doc.addOperations(deletedIdentifiers, renamedIdentifiers, movedIdentifiers);
+            }
 
             // for (let deletedIdentifier of deletedIdentifiers.keys()){
             //     let path = getPathForIdentifier(deletedIdentifier);
@@ -1723,22 +1736,11 @@ export async function activate(context: vscode.ExtensionContext) {
                     // delete the file/directory
                     let path = getPathForIdentifier(identifier);
                     if (path){
-                        if (trashDirectory.length > 0){
-                            let uniqueName = name + '-' + Date.now();
-                            if (isDir){
-                                uniqueName = name.slice(0, -1) + '-' + Date.now() + '/';
-                            }
-
-                            let trashPath = vscode.Uri.joinPath(vscode.Uri.file(trashDirectory), uniqueName);
-                            await vscode.workspace.fs.rename(vscode.Uri.parse(path), trashPath);
+                        if (isDir) {
+                            await vscode.workspace.fs.delete(vscode.Uri.parse(path), { recursive: true });
                         }
-                        else{
-                            if (isDir) {
-                                await vscode.workspace.fs.delete(vscode.Uri.parse(path), { recursive: true });
-                            }
-                            else {
-                                await vscode.workspace.fs.delete(vscode.Uri.parse(path));
-                            }
+                        else {
+                            await vscode.workspace.fs.delete(vscode.Uri.parse(path));
                         }
 
                         deletePathIdentifier(path, identifier);

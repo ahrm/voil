@@ -370,10 +370,15 @@
             "changelog": "📜"
           }
         },
-        "voil.trashDirectory": {
-          "type": "string",
-          "default": "",
-          "description": "If set, files will be moved to this directory when deleted."
+        "voil.trash": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true, deleted files will be moved to the trash instead of being permanently deleted."
+        },
+        "voil.confirmDelete": {
+          "type": "boolean",
+          "default": true,
+          "description": "If false, we don't ask for confirmation before deleting files (unless the trash is disabled, in which case we always ask for confirmation)."
         },
         "voil.recursiveListingMaxDepth": {
           "type": "number",
