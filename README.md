@@ -1,10 +1,13 @@
 # Voil
 
+View on the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=AliMostafavi.voil).
+
+Youtube video showing voil features: https://www.youtube.com/watch?v=c_L0c7rcYLs&t=5s.
+
 Edit file system like a text buffer (similar to [oil.nvim](https://github.com/stevearc/oil.nvim)). Create new files/directories by typing their names in the editor (names ending with `/` are treated as directories). Convert your existing text-editing skills to file system manipulation skills, as opposed of the vscode's default file explorer which requires mouse interaction or memorizing new keybinds (and still is nowhere near as powerful). Demo:
 
 https://github.com/user-attachments/assets/2a04bff7-1c10-45ee-bf02-dd814a08a142
 
-View on the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=AliMostafavi.voil).
 
 ## How it works
 There is a hidden ID associated with each file which is how voil determines which file is being e.g. renamed or moved. This ID is normally hidden using vscode's decorations but you can show them by setting the following configs:
