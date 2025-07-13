@@ -1667,6 +1667,7 @@ export async function activate(context: vscode.ExtensionContext) {
         if (currentTargetPath !== originalTargetPath){
             // ignore the original target path after the last slash
             originalTargetPath = originalTargetPath.slice(0, originalTargetPath.lastIndexOf('/') + 1);
+            doc.showRecursive = false;
 
             let newUri = vscode.Uri.parse(currentTargetPath);
             let exists = await vscode.workspace.fs.stat(newUri).then(() => true, () => false);
@@ -1680,9 +1681,19 @@ export async function activate(context: vscode.ExtensionContext) {
             else{
                 if (currentTargetPath.startsWith(originalTargetPath)){
                     let filterString = currentTargetPath.slice(originalTargetPath.length);
+                    if (filterString.startsWith('**')){
+                        doc.showRecursive = true;
+                        filterString = filterString.substring(2, filterString.length);
+
+                        if (filterString.startsWith("/")) {
+                            filterString = filterString.substring(1, filterString.length);
+                        }
+                    }
+
                     doc.setFilterPatternGlob(filterString);
                     await updateDocContentToCurrentDir(doc);
                     doc.enableWatcher();
+
                     return;
                 }
             }
