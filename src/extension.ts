@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 
 import * as utils from './utils';
+import {saveToTrash, restoreFromTrash, clearTrash} from './trash';
 import { count } from 'console';
 import {exec} from 'child_process';
 
@@ -144,6 +145,7 @@ let customShellCommands_ = config.get<CustomShellCommand[]>('customShellCommands
 let trashDirectory = config.get<string>('trashDirectory') ?? "";
 let customShellCommands = customShellCommands_?.map((cmd) => new CustomShellCommand(cmd.name, cmd.id, cmd.cmd, cmd.embeddedShell));
 var savedEditorLayout: SavedEditorLayout | undefined = undefined;
+let trashDir: vscode.Uri;
 
 class DirectoryListingData {
     identifier: string;
@@ -162,17 +164,49 @@ class DirectoryListingData {
 
 class RenamedDirectoryListingItem{
     oldPath: string;
+    newPath: string;
     newData: DirectoryListingData;
 
-    constructor(oldPath: string, newData: DirectoryListingData) {
+    constructor(oldPath: string, newPath: string, newData: DirectoryListingData) {
         this.oldPath = oldPath;
+        this.newPath = newPath;
         this.newData = newData;
+    }
+}
+
+class DeleteOperation{
+    uri: vscode.Uri;
+    constructor(path: vscode.Uri) {
+        this.uri = path;
+    }
+}
+
+class MoveOperation{
+    oldUri: vscode.Uri;
+    newUri: vscode.Uri;
+
+    constructor(oldPath: vscode.Uri, newPath: vscode.Uri) {
+        this.oldUri = oldPath;
+        this.newUri = newPath;
+    }
+}
+
+class FileOperation {
+    deletedIdentifiers: DeleteOperation[] = [];
+    movedIdentifiers: MoveOperation[] = [];
+
+    constructor(
+        deletedIdentifiers: DeleteOperation[],
+        movedIdentifiers: MoveOperation[]
+    ) {
+        this.deletedIdentifiers = deletedIdentifiers;
+        this.movedIdentifiers = movedIdentifiers;
     }
 }
 
 
 async function showDeleteConfirmation(
-    deletedIdentifiers: Map<string, DirectoryListingData[]>,
+    deletedIdentifiers: Map<string, DirectoryListingData>,
     renamedIdentifiers: Map<string, RenamedDirectoryListingItem>,
     movedIdentifiers: Map<string, RenamedDirectoryListingItem>) {
     const panel = vscode.window.createWebviewPanel(
@@ -183,7 +217,7 @@ async function showDeleteConfirmation(
     );
 
     let deletedItemsList = '';
-    for (let [identifier, [{ isDir, name, isNew }]] of deletedIdentifiers) {
+    for (let [identifier, { isDir, name, isNew }] of deletedIdentifiers) {
         deletedItemsList += `<li style="color:red;">${name}</li>`;
     }
 
@@ -517,6 +551,7 @@ class VoilDoc {
     terminal: vscode.Terminal | undefined = undefined;
 
     history: vscode.Uri[] = [];
+    prevOperations: FileOperation[] = [];
     currentHistoryIndex: number = -1; 
 
     watcher: vscode.FileSystemWatcher | undefined;
@@ -545,6 +580,59 @@ class VoilDoc {
     cancelWatcherTimeout() {
         if (this.watcherHandleEventTimeout) {
             clearTimeout(this.watcherHandleEventTimeout);
+        }
+    }
+
+    async addOperations(deletedIdentifiers: Map<string, DirectoryListingData>,
+    renamedIdentifiers: Map<string, RenamedDirectoryListingItem>,
+    movedIdentifiers: Map<string, RenamedDirectoryListingItem>) {
+        // move the deleted identifiers to trash
+        let deleteOperations: DeleteOperation[] = [];
+        let moveOperations: MoveOperation[] = [];
+
+        for (let [identifier, item] of deletedIdentifiers) {
+            let uriForIdentifier: vscode.Uri = vscode.Uri.parse(getPathForIdentifier(identifier)!);
+            deleteOperations.push(new DeleteOperation(uriForIdentifier));
+        }
+
+        for (let [identifier, item] of movedIdentifiers) {
+            let oldUri = vscode.Uri.parse(getPathForIdentifier(identifier)!);
+            let newUri = vscode.Uri.parse(item.newPath);
+            moveOperations.push(new MoveOperation(oldUri, newUri));
+        }
+
+        for (let [identifier, item] of renamedIdentifiers) {
+            let oldUri = vscode.Uri.parse(getPathForIdentifier(identifier)!);
+            let newUri = vscode.Uri.parse(item.newPath);
+            moveOperations.push(new MoveOperation(oldUri, newUri));
+        }
+
+        for (let deleteOperation of deleteOperations) {
+            if (deleteOperation.uri) {
+                await saveToTrash(deleteOperation.uri, trashDir);
+            }
+        }
+
+        let operation: FileOperation = new FileOperation(deleteOperations, moveOperations);
+        this.prevOperations.push(operation);
+    }
+
+    async undoLastOperation() {
+        if (this.prevOperations.length === 0) {
+            return;
+        }
+
+        let lastOperation = this.prevOperations.pop();
+        if (!lastOperation) {
+            return;
+        }
+
+        for (let deleteOperation of lastOperation.deletedIdentifiers) {
+            await restoreFromTrash(deleteOperation.uri, trashDir)
+        }
+
+        for (let moveOperation of lastOperation.movedIdentifiers) {
+            await vscode.workspace.fs.rename(moveOperation.newUri, moveOperation.oldUri, { overwrite: true });
         }
     }
 
@@ -1299,7 +1387,7 @@ const getModificationsFromContentDiff = (doc: VoilDoc, oldContent: string, newCo
     var copiedIdentifiers: Map<string, DirectoryListingData[]> = new Map();
     var movedIdentifiers: Map<string, RenamedDirectoryListingItem> = new Map();
     var renamedIdentifiers: Map<string, RenamedDirectoryListingItem> = new Map();
-    var deletedIdentifiers: Map<string, DirectoryListingData[]> = new Map();
+    var deletedIdentifiers: Map<string, DirectoryListingData> = new Map();
 
     for (let [identifier, items] of newIdentifiers) {
         let originalPath = getPathForIdentifier(identifier);
@@ -1326,7 +1414,8 @@ const getModificationsFromContentDiff = (doc: VoilDoc, oldContent: string, newCo
         if (isCurrentDirTheSameAsOriginal) {
 
             if (!originalExists && newItems.length > 0 && originalPath) {
-                renamedIdentifiers.set(identifier, new RenamedDirectoryListingItem(originalPath, newItems[0]));
+                let newPath = vscode.Uri.joinPath(doc.currentDir!, newItems[0].name).toString();
+                renamedIdentifiers.set(identifier, new RenamedDirectoryListingItem(originalPath, newPath, newItems[0]));
                 newItems = newItems.slice(1);
             }
 
@@ -1340,7 +1429,8 @@ const getModificationsFromContentDiff = (doc: VoilDoc, oldContent: string, newCo
                 if (cutIdentifiers.has(identifier)) {
                     let firstItem = newItems[0];
                     let rest = newItems.slice(1);
-                    movedIdentifiers.set(identifier, new RenamedDirectoryListingItem(originalPath!, firstItem));
+                    let newPath = vscode.Uri.joinPath(doc.currentDir!, firstItem.name).toString();
+                    movedIdentifiers.set(identifier, new RenamedDirectoryListingItem(originalPath!, newPath, firstItem));
                     if (rest.length > 0) {
                         copiedIdentifiers.set(identifier, rest);
                     }
@@ -1353,8 +1443,8 @@ const getModificationsFromContentDiff = (doc: VoilDoc, oldContent: string, newCo
     }
 
     for (let [identifier, obj] of originalIdentifiers) {
-        if (!newIdentifiers.has(identifier)) {
-            deletedIdentifiers.set(identifier, obj);
+        if (!newIdentifiers.has(identifier) && obj.length == 1) {
+            deletedIdentifiers.set(identifier, obj[0]);
         }
     }
     return { copiedIdentifiers, movedIdentifiers, renamedIdentifiers, deletedIdentifiers };
@@ -1390,25 +1480,13 @@ export async function activate(context: vscode.ExtensionContext) {
         updateCurrentInstanceUuid();
     }, 1000 * 60 * 5); // update every 5 minutes
 
-    // var currentDir = vscode.workspace.workspaceFolders?.[0].uri;
+    extensionDataDir = context.globalStorageUri;
+    trashDir = vscode.Uri.joinPath(extensionDataDir, 'trash');
 
-    // const countKey = 'voil.count';
-    // if (context.globalState.keys().length == 0){
-    //     context.globalState.setKeysForSync([countKey]);
-    //     context.globalState.update(countKey, 0);
-    //     console.log('initial');
-    // }
-    // else{
-    //     let currentCount: number = context.globalState.get(countKey)!;
-    //     context.globalState.update(countKey, currentCount+1);
-    //     console.log(currentCount);
-    // }
-    // console.log('activated new');
-    // console.log(vscode.env.remoteName);
+    // make sure the trash directory exists
+    await vscode.workspace.fs.createDirectory(trashDir);
 
     // update the settings when they change
-    extensionDataDir = context.globalStorageUri;
-
     vscode.workspace.onDidChangeConfiguration((e) => {
         context.globalState
         config = vscode.workspace.getConfiguration('voil');
@@ -1555,6 +1633,17 @@ export async function activate(context: vscode.ExtensionContext) {
     });
 
 
+    const handleUndo = vscode.commands.registerCommand('voil.undo', async () => {
+        let doc = await getVoilDocForActiveEditor();
+        if (doc){
+            await doc.undoLastOperation();
+        }
+    });
+
+    const handleClearTrash = vscode.commands.registerCommand('voil.clearTrash', async () => {
+        await clearTrash(trashDir);
+    });
+
     const handleSave = vscode.commands.registerCommand('voil.save', async () => {
         let doc = await getVoilDocForActiveEditor();
         if (!doc) return;
@@ -1616,10 +1705,21 @@ export async function activate(context: vscode.ExtensionContext) {
 
         if (deletedIdentifiers.size > 0 || renamedIdentifiers.size > 0 || movedIdentifiers.size > 0){
             let response = await showDeleteConfirmation(deletedIdentifiers, renamedIdentifiers, movedIdentifiers);
+
+            await doc.addOperations(deletedIdentifiers, renamedIdentifiers, movedIdentifiers);
+
+            // for (let deletedIdentifier of deletedIdentifiers.keys()){
+            //     let path = getPathForIdentifier(deletedIdentifier);
+            //     if (path){
+            //         let uri = vscode.Uri.parse(path);
+            //         await saveToTrash(uri, trashDir);
+            //     }
+            // }
+
             // make sure the document has focus
             await vscode.window.showTextDocument(doc.doc);
             if (response === 'Yes'){
-                for (let [identifier, [{ isDir, name, isNew }]] of deletedIdentifiers){
+                for (let [identifier, { isDir, name, isNew }] of deletedIdentifiers){
                     // delete the file/directory
                     let path = getPathForIdentifier(identifier);
                     if (path){
@@ -1951,6 +2051,8 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(openCurrentDirectory);
     context.subscriptions.push(voilPreviousCommand);
     context.subscriptions.push(voilNextCommand);
+    context.subscriptions.push(handleUndo);
+    context.subscriptions.push(handleClearTrash);
 
     context.subscriptions.push(
         vscode.workspace.onWillSaveTextDocument(async (event: vscode.TextDocumentWillSaveEvent) => {

@@ -125,6 +125,14 @@
       {
         "command": "voil.openCurrentDirectory",
         "title": "Voil: Open the current directory in the default file explorer"
+      },
+      {
+        "command": "voil.undo",
+        "title": "Voil: Undo the last operation"
+      },
+      {
+        "command": "voil.clearTrash",
+        "title": "Voil: Clear the trash"
       }
     ],
     "keybindings": [
