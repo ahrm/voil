@@ -157,6 +157,12 @@
         "when": "editorTextFocus && voilDoc && (!vim.active)"
       },
       {
+        "command": "voil.close",
+        "key": "ctrl+w",
+        "mac": "cmd+w",
+        "when": "voilDoc && editorFocus && (!vim.active || vim.mode == 'Normal')"
+      },
+      {
         "command": "voil.openCurrentDirectory",
         "key": "f5",
         "when": "editorTextFocus && voilDoc"
