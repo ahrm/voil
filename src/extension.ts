@@ -1189,7 +1189,7 @@ class VoilDoc {
             let meta = ' ';
             if (needsMetaString) {
                 meta = fileNameToMetadata.get(file[0]) ?? '';
-                meta = METADATA_BEGIN_SYMBOL + meta + METADATA_END_SYMBOL;
+                meta = METADATA_BEGIN_SYMBOL + meta + METADATA_END_SYMBOL + ' ';
             }
 
             let lineContent = '';
@@ -1215,7 +1215,7 @@ class VoilDoc {
 
             // pad line content to maxMetadataSize
             // lineContent = lineContent.padEnd(maxMetadataSize, ' ');
-            content += `/${lineContent} ${icon}${file[0]}${dirPostfix}\n`;
+            content += `/${lineContent}${icon}${file[0]}${dirPostfix}\n`;
         }
         this.previousContent = content;
         return content;
