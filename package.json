@@ -75,6 +75,10 @@
         "title": "Voil: Toggle file creation date"
       },
       {
+        "command": "voil.toggleModificationDate",
+        "title": "Voil: Toggle file modification date"
+      },
+      {
         "command": "voil.sortByFileName",
         "title": "Voil: Sort by file name"
       },

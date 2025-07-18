@@ -569,6 +569,7 @@ class VoilDoc {
 
     showFileSize: boolean = false;
     showFileCreationDate: boolean = false;
+    showLastModificationDate: boolean = false;
     sortBy: SortBy = SortBy.Name;
     isAscending: boolean = true;
 
@@ -653,6 +654,11 @@ class VoilDoc {
 
     async toggleCreationDate() {
         this.showFileCreationDate = !this.showFileCreationDate;
+        await updateDocContentToCurrentDir(this);
+    }
+
+    async toggleLastModificationDate() {
+        this.showLastModificationDate = !this.showLastModificationDate;
         await updateDocContentToCurrentDir(this);
     }
 
@@ -993,6 +999,9 @@ class VoilDoc {
         if (this.showFileCreationDate){
             numMetaDataItems += 1;
         }
+        if (this.showLastModificationDate) {
+            numMetaDataItems += 1;
+        }
         return numMetaDataItems;
     }
 
@@ -1020,6 +1029,8 @@ class VoilDoc {
 
         let fileNameToCreationDateString: Map<string, string> = new Map();
         let maxCreationDateStringSize = 0;
+        let fileNameToLastModificationDateString: Map<string, string> = new Map();
+        let maxLastModificationDateStringSize = 0;
         let fileNameToSizeString: Map<string, string> = new Map();
         let maxFileSizeStringSize = 0;
         let numMetaDataItems = this.getNumMetaDataItems();
@@ -1053,6 +1064,18 @@ class VoilDoc {
                         fileNameToCreationDateString.set(file[0], fileDateString);
                         maxCreationDateStringSize = Math.max(maxCreationDateStringSize, fileDateString.length);
                     }
+                    if (this.showLastModificationDate) {
+                        // display the date in this format: "Jul 15 16:43"
+                        let fileDateString = new Date(stats.mtime).toLocaleString('en-US', {
+                            month: 'short',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                        });
+                        fileNameToLastModificationDateString.set(file[0], fileDateString);
+                        maxLastModificationDateStringSize = Math.max(maxLastModificationDateStringSize, fileDateString.length);
+                    }
 
                 }
             }
@@ -1078,6 +1101,13 @@ class VoilDoc {
                     let fileDateString = fileNameToCreationDateString.get(file[0]) ?? '';
                     // pad the file date string
                     fileDateString = fileDateString.padEnd(maxCreationDateStringSize, ' ');
+                    addSeparator();
+                    metaString += fileDateString;
+                }
+                if (this.showLastModificationDate) {
+                    let fileDateString = fileNameToLastModificationDateString.get(file[0]) ?? '';
+                    // pad the file date string
+                    fileDateString = fileDateString.padEnd(maxLastModificationDateStringSize, ' ');
                     addSeparator();
                     metaString += fileDateString;
                 }
@@ -1139,7 +1169,7 @@ class VoilDoc {
             let fullPath = vscode.Uri.joinPath(rootUri!, file[0]).toString();
             let identifier = getIdentifierForPath(fullPath);
             let meta = ' ';
-            if (this.showFileSize || this.showFileCreationDate) {
+            if (needsMetaString) {
                 meta = fileNameToMetadata.get(file[0]) ?? '';
                 meta = METADATA_BEGIN_SYMBOL + meta + METADATA_END_SYMBOL;
             }
@@ -1605,6 +1635,14 @@ export async function activate(context: vscode.ExtensionContext) {
             voil.toggleCreationDate();
         }
     });
+
+    let toggleModificationDateCommand = vscode.commands.registerCommand('voil.toggleModificationDate', async () => {
+        let voil = await getVoilDocForActiveEditor();
+        if (voil !== undefined){
+            voil.toggleLastModificationDate();
+        }
+    });
+
 
     let sortByFileNameCommand = vscode.commands.registerCommand('voil.sortByFileName', async () => {
         let voil = await getVoilDocForActiveEditor();
@@ -2098,6 +2136,7 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(runPredefinedShellCommandOnSelection);
     context.subscriptions.push(toggleFileSizeCommand);
     context.subscriptions.push(toggleCreationDateCommand);
+    context.subscriptions.push(toggleModificationDateCommand);
     context.subscriptions.push(sortByFileNameCommand);
     context.subscriptions.push(sortByCreationTimeCommand);
     context.subscriptions.push(sortByFileTypeCommand);
