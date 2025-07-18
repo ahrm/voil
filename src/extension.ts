@@ -245,8 +245,8 @@ async function showDeleteConfirmation(
             ${deletedItemsHtml}
             ${renamedItemsHtml}
             ${movedItemsHtml}
-            <button id="noButton">No</button>
-            <button id="yesButton">Yes</button>
+            <button id="noButton">No (<code>n</code>)</button>
+            <button id="yesButton">Yes (<code>y</code>)</button>
             <script>
                 const vscode = acquireVsCodeApi();
                 document.getElementById('yesButton').addEventListener('click', () => {
@@ -265,6 +265,12 @@ async function showDeleteConfirmation(
                     } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
                         event.preventDefault();
                         document.getElementById('yesButton').focus();
+                    } else if (event.key === 'y' || event.key === 'Y') {
+                        event.preventDefault();
+                        vscode.postMessage({ command: 'yes' });
+                    } else if (event.key === 'n' || event.key === 'N') {
+                        event.preventDefault();
+                        vscode.postMessage({ command: 'no' });
                     }
                 });
 
