@@ -13,8 +13,10 @@ const IDENTIFIER_TO_PATH_MAP_KEY = 'identifierToPathMap';
 const CUT_IDENTIFIERS_KEY = 'cutIdentifiers';
 const HEADER_LINES = 2;
 const IDENTIFIER_SIZE = 20;
-const METADATA_BEGIN_SYMBOL = "/[";
-const METADATA_END_SYMBOL = "]/";
+const INVISIBLE_UNICODE_CHAR = "\u200B";
+const METADATA_BEGIN_SYMBOL = '[';
+const METADATA_END_SYMBOL = ' |';
+const METADATA_SEPARATOR = ' ';
 const PREVDIR_LINE = "../";
 const ILLEGAL_FILE_NAMES_ON_WINDOWS = [
     "System Volume Information",
@@ -306,12 +308,7 @@ const parseLine = (line: string): DirectoryListingData => {
     if (line.endsWith("\r")) {
         line = line.slice(0, -1);
     }
-    if (line.indexOf(METADATA_BEGIN_SYMBOL) !== -1) {
-        // remove metadata
-        let startIndex = line.indexOf(METADATA_BEGIN_SYMBOL);
-        let endIndex = line.indexOf(METADATA_END_SYMBOL);
-        line = line.slice(0, startIndex) + line.slice(endIndex + METADATA_END_SYMBOL.length);
-    }
+
     if (line == PREVDIR_LINE) {
         return {
             identifier: "",
@@ -319,6 +316,18 @@ const parseLine = (line: string): DirectoryListingData => {
             name: "..",
             isNew: false
         };
+    }
+
+    // index of first - or / after the first character
+    let fileTypeIndex = line.substring(1).search(/[-\/]/) + 1;
+    // let metaDataBeginIndex = line.indexOf(METADATA_BEGIN_SYMBOL);
+    let hasMetaData = line[fileTypeIndex+1] === METADATA_BEGIN_SYMBOL;
+
+    if (hasMetaData) {
+        // remove metadata
+        let startIndex = line.indexOf(METADATA_BEGIN_SYMBOL);
+        let endIndex = line.indexOf(METADATA_END_SYMBOL, startIndex + 1);
+        line = line.slice(0, startIndex) + line.slice(endIndex + METADATA_END_SYMBOL.length);
     }
 
     // line begins with slash folllowed by identifier
@@ -976,6 +985,17 @@ class VoilDoc {
         return currentPath;
     }
 
+    getNumMetaDataItems() {
+        let numMetaDataItems = 0;
+        if (this.showFileSize){
+            numMetaDataItems += 1;
+        }
+        if (this.showFileCreationDate){
+            numMetaDataItems += 1;
+        }
+        return numMetaDataItems;
+    }
+
     async getContentForPath(rootUri: vscode.Uri, isPreview: boolean = false) {
         let files = await vscode.workspace.fs.readDirectory(rootUri!);
         if (!isPreview && this.showRecursive) {
@@ -998,8 +1018,14 @@ class VoilDoc {
         let fileNameToMetadata: Map<string, string> = new Map();
         let fileNameToStats: Map<string, vscode.FileStat> = new Map();
 
-        let needsMetaString = this.showFileSize || this.showFileCreationDate;
-        let maxMetadataSize = 0;
+        let fileNameToCreationDateString: Map<string, string> = new Map();
+        let maxCreationDateStringSize = 0;
+        let fileNameToSizeString: Map<string, string> = new Map();
+        let maxFileSizeStringSize = 0;
+        let numMetaDataItems = this.getNumMetaDataItems();
+
+        let needsMetaString = numMetaDataItems > 0;
+        // let maxMetadataSize = 0;
         if (needsMetaString || this.sortBy === SortBy.Size || this.sortBy === SortBy.CreationDate) {
             for (let file of files) {
                 let fullPath = vscode.Uri.joinPath(rootUri!, file[0]).toString();
@@ -1010,36 +1036,55 @@ class VoilDoc {
                 fileNameToStats.set(file[0], stats);
 
                 if (needsMetaString) {
-                    let metaString = '';
-                    let numSeparators = 0;
-
-                    const addSeparator = () => {
-                        if (metaString.length > 0) {
-                            metaString += '|';
-                            numSeparators += 1;
-                        }
-                    };
-
-                    if (this.showFileSize) {
+                    if (this.showFileSize){
                         let fileSizeString = utils.getFileSizeHumanReadableName(stats.size);
-                        addSeparator();
-                        metaString += fileSizeString;
+                        fileNameToSizeString.set(file[0], fileSizeString);
+                        maxFileSizeStringSize = Math.max(maxFileSizeStringSize, fileSizeString.length);
                     }
                     if (this.showFileCreationDate) {
-                        let fileDateString = new Date(stats.mtime).toLocaleDateString();
-                        addSeparator();
-                        metaString += fileDateString;
-
-                    }
-                    // let metaString = `${fileDateString}|${fileSizeString}`;
-                    fileNameToMetadata.set(file[0], metaString);
-                    let metaDataSize = IDENTIFIER_SIZE + 8 + numSeparators + metaString.length;
-                    if (metaDataSize > maxMetadataSize) {
-                        maxMetadataSize = metaDataSize;
+                        // display the date in this format: "Jul 15 16:43"
+                        let fileDateString = new Date(stats.ctime).toLocaleString('en-US', {
+                            month: 'short',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                        });
+                        fileNameToCreationDateString.set(file[0], fileDateString);
+                        maxCreationDateStringSize = Math.max(maxCreationDateStringSize, fileDateString.length);
                     }
 
                 }
             }
+        }
+        if (needsMetaString){
+            for (let file of files){
+                let metaString = '';
+
+                const addSeparator = () => {
+                    if ((numMetaDataItems > 1) && (metaString.length > 0)) {
+                        metaString += METADATA_SEPARATOR;
+                    }
+                };
+
+                if (this.showFileSize){
+                    let fileSizeString = fileNameToSizeString.get(file[0]) ?? '';
+                    // pad the file size string
+                    fileSizeString = fileSizeString.padEnd(maxFileSizeStringSize, ' ');
+                    addSeparator();
+                    metaString += fileSizeString;
+                }
+                if (this.showFileCreationDate){
+                    let fileDateString = fileNameToCreationDateString.get(file[0]) ?? '';
+                    // pad the file date string
+                    fileDateString = fileDateString.padEnd(maxCreationDateStringSize, ' ');
+                    addSeparator();
+                    metaString += fileDateString;
+                }
+
+                fileNameToMetadata.set(file[0], metaString);
+            }
+
         }
 
 
@@ -1093,7 +1138,7 @@ class VoilDoc {
             let isDir = file[1] === vscode.FileType.Directory;
             let fullPath = vscode.Uri.joinPath(rootUri!, file[0]).toString();
             let identifier = getIdentifierForPath(fullPath);
-            let meta = '';
+            let meta = ' ';
             if (this.showFileSize || this.showFileCreationDate) {
                 meta = fileNameToMetadata.get(file[0]) ?? '';
                 meta = METADATA_BEGIN_SYMBOL + meta + METADATA_END_SYMBOL;
@@ -1101,10 +1146,10 @@ class VoilDoc {
 
             let lineContent = '';
             if (isDir) {
-                lineContent = `${identifier} / ${meta}`;
+                lineContent = `${identifier} /${meta}`;
             }
             else {
-                lineContent = `${identifier} - ${meta}`;
+                lineContent = `${identifier} -${meta}`;
             }
 
             if (isPreview) {
@@ -1121,8 +1166,8 @@ class VoilDoc {
             }
 
             // pad line content to maxMetadataSize
-            lineContent = lineContent.padEnd(maxMetadataSize, ' ');
-            content += `/${lineContent}${icon}${file[0]}${dirPostfix}\n`;
+            // lineContent = lineContent.padEnd(maxMetadataSize, ' ');
+            content += `/${lineContent} ${icon}${file[0]}${dirPostfix}\n`;
         }
         this.previousContent = content;
         return content;

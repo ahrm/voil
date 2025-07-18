@@ -13,19 +13,19 @@
     }
   },
   {
-    "match": "^\\/[a-zA-Z]{20} - .*\\.txt$",
+    "match": "^\\/[a-zA-Z]{20} -.*\\.txt$",
     "name": "voil.filetype.txt"
   },
   {
-    "match": "^\\/[a-zA-Z]{20} - .*\\.(c|cpp|h|hpp|cc|cxx|hh|hxx|py|sh|bat|ts|js|java|rb|go|html|css)$",
+    "match": "^\\/[a-zA-Z]{20} -.*\\.(c|cpp|h|hpp|cc|cxx|hh|hxx|py|sh|bat|ts|js|java|rb|go|html|css)$",
     "name": "voil.filetype.code"
   },
   {
-    "match": "^\\/[a-zA-Z]{20} - .*$",
+    "match": "^\\/[a-zA-Z]{20} -.*$",
     "name": "voil.filetype.generic"
   },
   {
-    "match": "^\\/[a-zA-Z]{20} / .*$",
+    "match": "^\\/[a-zA-Z]{20} /.*$",
     "name": "voil.dirtype.dir"
   },
   {
