@@ -107,6 +107,10 @@
         "title": "Voil: Sort by file creation time"
       },
       {
+        "command": "voil.sortByFileModificationTime",
+        "title": "Voil: Sort by file modification time"
+      },
+      {
         "command": "voil.sortByFileSize",
         "title": "Voil: Sort by file size"
       },

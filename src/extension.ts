@@ -301,7 +301,8 @@ enum SortBy {
     Name,
     FileType,
     Size,
-    CreationDate
+    CreationDate,
+    ModificationDate,
 };
 
 const parseLine = (line: string): DirectoryListingData => {
@@ -713,6 +714,11 @@ class VoilDoc {
         await updateDocContentToCurrentDir(this);
     }
 
+    async sortByModificationTime() {
+        this.sortBy = SortBy.ModificationDate;
+        await updateDocContentToCurrentDir(this);
+    }
+
     async sortBySize() {
         this.sortBy = SortBy.Size;
         await updateDocContentToCurrentDir(this)
@@ -1037,7 +1043,7 @@ class VoilDoc {
 
         let needsMetaString = numMetaDataItems > 0;
         // let maxMetadataSize = 0;
-        if (needsMetaString || this.sortBy === SortBy.Size || this.sortBy === SortBy.CreationDate) {
+        if (needsMetaString || this.sortBy === SortBy.Size || this.sortBy === SortBy.CreationDate || this.sortBy === SortBy.ModificationDate) {
             for (let file of files) {
                 let fullPath = vscode.Uri.joinPath(rootUri!, file[0]).toString();
                 if ((process.platform === "win32") && ILLEGAL_FILE_NAMES_ON_WINDOWS.includes(file[0])) {
@@ -1128,6 +1134,17 @@ class VoilDoc {
                 let bStats = fileNameToStats.get(b[0]);
                 if (aStats && bStats) {
                     return aStats.ctime - bStats.ctime;
+                }
+                return 0;
+            };
+            sorter = statsSorter;
+        }
+        if (this.sortBy === SortBy.ModificationDate) {
+            let statsSorter = (a: [string, vscode.FileType], b: [string, vscode.FileType]) => {
+                let aStats = fileNameToStats.get(a[0]);
+                let bStats = fileNameToStats.get(b[0]);
+                if (aStats && bStats) {
+                    return aStats.mtime - bStats.mtime;
                 }
                 return 0;
             };
@@ -1665,6 +1682,13 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    let sortByModificationTimeCommand = vscode.commands.registerCommand('voil.sortByFileModificationTime', async () => {
+        let voil = await getVoilDocForActiveEditor();
+        if (voil !== undefined){
+            voil.sortByModificationTime();
+        }
+    });
+
     let sortByFileSizeCommand = vscode.commands.registerCommand('voil.sortByFileSize', async () => {
         let voil = await getVoilDocForActiveEditor();
         if (voil !== undefined){
@@ -2139,6 +2163,7 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(toggleModificationDateCommand);
     context.subscriptions.push(sortByFileNameCommand);
     context.subscriptions.push(sortByCreationTimeCommand);
+    context.subscriptions.push(sortByModificationTimeCommand);
     context.subscriptions.push(sortByFileTypeCommand);
     context.subscriptions.push(sortByFileSizeCommand);
     context.subscriptions.push(toggleSortOrderCommand);
