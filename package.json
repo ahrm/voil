@@ -176,55 +176,6 @@
         "when": "editorTextFocus && voilDoc"
       }
     ],
-    "configurationDefaults": {
-      "editor.tokenColorCustomizations": {
-        "textMateRules": [
-          {
-            "scope": "voil.filetype.txt",
-            "settings": {
-              "foreground": "#cccccc"
-            }
-          },
-          {
-              "scope": "voil.currentDirectory",
-              "settings": {
-                  "foreground": "#666666"
-              }
-          },
-          {
-              "scope": "voil.currentDirectoryGlob",
-              "settings": {
-                  "foreground": "#cccccc"
-              }
-          },
-          
-          {
-            "scope": "voil.dirtype.dir",
-            "settings": {
-              "foreground": "#3794ff"
-            }
-          },
-          {
-            "scope": "voil.filetype.code",
-            "settings": {
-              "foreground": "#edbbff"
-            }
-          },
-          {
-            "scope": "voil.unlisted",
-            "settings": {
-              "foreground": "#666666"
-            }
-          },
-          {
-            "scope": "voil.filetype.generic",
-            "settings": {
-              "foreground": "#f48771"
-            }
-          }
-        ]
-      }
-    },
     "configuration": {
       "type": "object",
       "title": "VOIL",

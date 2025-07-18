@@ -11,13 +11,14 @@ const RUNNING_VOIL_INSTANCES_KEY = 'runningVoilInstances';
 const PATH_TO_IDENTIFIER_MAP_KEY = 'pathToIdentifierMap';
 const IDENTIFIER_TO_PATH_MAP_KEY = 'identifierToPathMap';
 const CUT_IDENTIFIERS_KEY = 'cutIdentifiers';
-const HEADER_LINES = 2;
-const IDENTIFIER_SIZE = 20;
-const INVISIBLE_UNICODE_CHAR = "\u200B";
-const METADATA_BEGIN_SYMBOL = '[';
-const METADATA_END_SYMBOL = ' |';
-const METADATA_SEPARATOR = ' ';
-const PREVDIR_LINE = "../";
+export const HEADER_LINES = 2;
+export const IDENTIFIER_SIZE = 20;
+export const INVISIBLE_UNICODE_CHAR = "\u200B";
+export const METADATA_BEGIN_SYMBOL = '[';
+export const METADATA_END_SYMBOL = ' |';
+export const METADATA_SEPARATOR = ' ';
+export const PREVDIR_LINE = "../";
+
 const ILLEGAL_FILE_NAMES_ON_WINDOWS = [
     "System Volume Information",
     "$RECYCLE.BIN",
@@ -1002,7 +1003,7 @@ class VoilDoc {
         if (this.showFileSize){
             numMetaDataItems += 1;
         }
-        if (this.showFileCreationDate){
+        if (this.showFileCreationDate) {
             numMetaDataItems += 1;
         }
         if (this.showLastModificationDate) {
