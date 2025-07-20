@@ -1773,6 +1773,25 @@ export async function activate(context: vscode.ExtensionContext) {
         let content = doc.doc.getText();
         let originalContent = doc.previousContent;
 
+        let editor = doc.getTextEditor();
+        if (editor){
+            let path = doc.getCurrentDirPath();
+
+            let isRemote = path.startsWith('vscode-remote://') || path.startsWith('ssh-remote://') || path.startsWith('dev-container://');
+
+            // show "saving ..." in the document
+            if (isRemote){
+                await editor.edit((editBuilder) => {
+                    editBuilder.replace(new vscode.Range(
+                        editor.document.positionAt(0),
+                        editor.document.positionAt(editor.document.getText().length)
+                    ), "saving ...");
+                });
+            }
+
+        }
+
+
         // if (content !== doc.previousContent){
         //     originalContent = await doc.getContentForPath(doc.currentDir!);
         // }
