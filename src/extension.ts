@@ -1795,8 +1795,8 @@ export async function activate(context: vscode.ExtensionContext) {
         // if (content !== doc.previousContent){
         //     originalContent = await doc.getContentForPath(doc.currentDir!);
         // }
-        let currentTargetPath = content.split("\n")[0];
-        let originalTargetPath = originalContent.split("\n")[0];
+        let currentTargetPath = content.split("\n")[0].trim();
+        let originalTargetPath = originalContent.split("\n")[0].trim();
         if (currentTargetPath !== originalTargetPath){
             // ignore the original target path after the last slash
             originalTargetPath = originalTargetPath.slice(0, originalTargetPath.lastIndexOf('/') + 1);
