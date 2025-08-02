@@ -6,7 +6,20 @@ import * as utils from './utils';
 export function getTrashPathFromUri(uri: vscode.Uri, trashDir: vscode.Uri){
     // should return trashdir joined with the parent of uri
     let parentDir = path.dirname(uri.fsPath);
-    return vscode.Uri.joinPath(trashDir, parentDir);
+
+    // if we are on windows
+    if (process.platform == "win32"){
+        parentDir = parentDir.replace(":\\", "\\");
+        parentDir = parentDir.replaceAll("\\", "/");
+    }
+
+
+    if (parentDir.startsWith("vscode-remote://")){
+        parentDir = parentDir.substring(16);
+    }
+
+    let result = vscode.Uri.joinPath(trashDir, parentDir);
+    return result;
 }
 
 export async function saveToTrash(uri: vscode.Uri, trashDir: vscode.Uri){
