@@ -2,7 +2,7 @@
   "name": "voil",
   "displayName": "voil",
   "description": "Edit the filesystem like a text buffer.",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "repository": {
     "url": "https://github.com/ahrm/voil",
     "type": "git"
